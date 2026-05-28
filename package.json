@@ -36,6 +36,17 @@
     "rxjs": "^7.8.0",
     "socket.io": "^4.8.3"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "bcrypt",
+      "esbuild",
+      "prisma",
+      "@scarf/scarf"
+    ]
+  },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.1.0",
