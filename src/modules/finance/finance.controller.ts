@@ -1,15 +1,18 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, Inject, UseGuards } from '@nestjs/common';
-import { FinanceService } from './finance.service.js';
-import { AccountService } from './account.service.js';
-import { JournalService } from './journal.service.js';
-import { LedgerService } from './ledger.service.js';
-import { FinancialReportService } from './financial-report.service.js';
-import { ARAgingService } from './ar-aging.service.js';
-import { APAgingService } from './ap-aging.service.js';
-import { BudgetService } from './budget.service.js';
-import { CreditLimitService } from './credit-limit.service.js';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
+import { FinanceService } from './finance.service.js';
+import { AccountService } from './accounts/account.service.js';
+import { BudgetService } from './accounts/budget.service.js';
+import { CreditLimitService } from './accounts/credit-limit.service.js';
+import { JournalService } from './journals/journal.service.js';
+import { LedgerService } from './journals/ledger.service.js';
+import { FinancialReportService } from './reports/financial-report.service.js';
+import { ARAgingService } from './aging/ar-aging.service.js';
+import { APAgingService } from './aging/ap-aging.service.js';
 
+@ApiTags('finance')
+@ApiBearerAuth('JWT')
 @Controller('finance')
 @UseGuards(JwtAuthGuard)
 export class FinanceController {

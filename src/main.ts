@@ -1,14 +1,19 @@
 import 'reflect-metadata';
-import { NestFactory, Reflector } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ResponseInterceptor } from './core/interceptors/response.interceptor.js';
+import { GlobalExceptionFilter } from './core/filters/http-exception.filter.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
 
+  // ─── Global Exception Filter ─────────────────────────────────────────────
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // ─── CORS ─────────────────────────────────────────────────────────────────
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) { callback(null, true); return; }
@@ -29,9 +34,13 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Branch-Id'],
   });
 
+  // ─── Global Pipes ─────────────────────────────────────────────────────────
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: false }));
+
+  // ─── Global Interceptors ──────────────────────────────────────────────────
   app.useGlobalInterceptors(new ResponseInterceptor());
 
+  // ─── Rate Limiter ─────────────────────────────────────────────────────────
   const rateLimitWindow = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
   const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || 1000);
   const requestCounters = new Map<string, { count: number; windowStart: number }>();
@@ -58,7 +67,7 @@ async function bootstrap() {
     next();
   });
 
-  // ─── Swagger ────────────────────────────────────────────────────────────────
+  // ─── Swagger ──────────────────────────────────────────────────────────────
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Gentong Mas ERP API')
     .setDescription('Backend API for Gentong Mas ERP System')
@@ -68,6 +77,7 @@ async function bootstrap() {
       'JWT',
     )
     .addTag('auth', 'Authentication & Authorization')
+    .addTag('users', 'User & Role Management')
     .addTag('inventory', 'Inventory & Stock Management')
     .addTag('sales', 'Sales Orders & Invoices')
     .addTag('purchasing', 'Purchase Orders & Goods Receipt')
@@ -79,7 +89,6 @@ async function bootstrap() {
     .addTag('manufacturing', 'Manufacturing & Production')
     .addTag('crm', 'CRM & Leads')
     .addTag('helpdesk', 'Helpdesk & Tickets')
-    .addTag('users', 'User & Role Management')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

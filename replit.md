@@ -14,33 +14,75 @@ NestJS 11 + Prisma 5 backend for the Gentong Mas ERP system.
 
 ```
 src/
-├── app.module.ts            # Root module
-├── main.ts                  # Bootstrap (port 3000)
-├── core/                    # Cross-cutting infrastructure
+├── main.ts                  # Bootstrap — global filter, pipes, interceptors
+├── app.module.ts            # Root module — all feature modules + global providers
+│
+├── core/                    # Cross-cutting infrastructure (single source of truth)
 │   ├── prisma/              # PrismaService singleton
-│   ├── guards/              # JwtAuthGuard, RolesGuard, PermissionsGuard
-│   ├── decorators/          # @CurrentUser, @Roles, @Permissions, @Public
-│   └── interceptors/        # ResponseInterceptor (envelope wrapper)
-├── common/                  # Shared utilities
-│   ├── enums/               # App-wide enums
-│   ├── interfaces/          # Shared TypeScript interfaces
-│   └── interceptors/        # AuditInterceptor
-├── integrations/
-│   └── kledo/               # Kledo accounting sync (KledoService, KledoModule)
-└── modules/                 # Feature modules
-    ├── auth/
-    │   ├── controllers/     # AuthController
-    │   ├── services/        # AuthService
-    │   └── strategies/      # JwtStrategy
-    ├── inventory/           # Products, Stock, StockMovement, Valuation, Costing
-    ├── user/                # User + Role + Permission management
-    ├── finance/             # Journals, Accounts, Bank/Cash transactions
-    ├── sales/               # Orders, Sales, Customers
-    ├── purchasing/          # PurchaseOrder, GoodsReceipt, Suppliers
-    ├── payroll/             # Payroll, Slips, Attendance, Leave
-    ├── assets/              # Fixed Assets, Depreciation
-    ├── pos/                 # Point-of-Sale (PosProduct has its own stok field)
-    └── ...                  # Other ERP modules
+│   ├── guards/              # JwtAuthGuard, RouteRoleGuard, CanAccessGuard, PermissionsGuard
+│   ├── decorators/          # @CurrentUser, @Roles, @Permissions, @CanAccess, @Public
+│   ├── interceptors/        # ResponseInterceptor (envelope), AuditInterceptor
+│   ├── filters/             # GlobalExceptionFilter
+│   └── config/              # configuration() factory (JWT, DB, Kledo, Fonnte, rate-limit)
+│
+├── common/                  # Shared domain utilities
+│   ├── enums/               # CostingMethod, TaxType, AccountType, JournalStatus, etc.
+│   ├── interfaces/          # PaginatedResult, JwtUser, ApiResponse
+│   ├── types/               # StockMovementType, ReferenceType, SortOrder, etc.
+│   ├── helpers/             # paginate(), paginateResult()
+│   ├── constants/           # ERP_ROLES, ROLE_GROUPS
+│   └── utils/               # canAccess()
+│
+├── modules/                 # Feature modules (domain-driven)
+│   ├── auth/                # JWT login, refresh, register, profile
+│   ├── user/                # User CRUD + password management
+│   ├── role/                # Role & Permission management
+│   │
+│   ├── inventory/           # Products, Warehouses, Stock, Opname
+│   │   └── stock/           # CostingService (FIFO/avg), ValuationService, LandedCostService
+│   │
+│   ├── sales/               # Sales Orders, Invoices
+│   ├── purchasing/          # Purchase Orders, Goods Receipt
+│   ├── customers/           # Customer master data
+│   │
+│   ├── finance/             # Double-entry accounting
+│   │   ├── accounts/        # AccountService, BudgetService, CreditLimitService
+│   │   ├── journals/        # JournalService, LedgerService, AutoJournalService
+│   │   ├── reports/         # FinancialReportService (balance sheet, P&L, cash flow)
+│   │   └── aging/           # ARAgingService, APAgingService
+│   │
+│   ├── tax/                 # Tax engine + e-Faktur
+│   ├── payroll/             # Payroll periods + salary slips
+│   ├── hr/                  # Employee master data
+│   ├── leave/               # Leave requests
+│   ├── recruitment/         # Hiring pipeline
+│   ├── asset/               # Fixed assets + depreciation
+│   ├── pos/                 # Point of Sale
+│   ├── manufacturing/       # Bill of Materials, Production Orders
+│   ├── quality/             # Quality Control
+│   ├── maintenance/         # Asset maintenance
+│   ├── fleet/               # Vehicle management
+│   ├── crm/                 # Leads & opportunities
+│   ├── project/             # Project tracking
+│   ├── helpdesk/            # Support tickets
+│   ├── branch/              # Company & branch master data
+│   ├── driver-areas/        # Delivery area management
+│   ├── settings/            # System settings
+│   ├── dashboard/           # Aggregated stats per role
+│   ├── audit/               # Audit log viewer
+│   └── notification/        # WebSocket notifications
+│
+├── integrations/            # Third-party connectors
+│   ├── kledo/               # Kledo accounting sync
+│   ├── whatsapp/            # (reserved — Fonnte)
+│   ├── marketplace/         # (reserved)
+│   ├── payment-gateway/     # (reserved)
+│   └── shipping/            # (reserved)
+│
+└── jobs/                    # Background processing (reserved)
+    ├── queues/
+    ├── workers/
+    └── schedulers/
 ```
 
 ## Key Design Decisions
@@ -50,29 +92,18 @@ src/
 - **PosProduct.stok**: POS-specific denormalized field — intentionally kept separate
   from warehouse stock.
 - **ESM imports**: All internal imports must use `.js` extension (TypeScript ESM).
-- **All imports must use new paths**: `core/prisma`, `core/guards`, `core/decorators`,
-  `integrations/kledo` — never the old `database/`, `common/guards`, `modules/kledo` paths.
+- **Import paths**: Always use `core/` and `common/` — never `common/guards` or `common/decorators`
+  (those duplicates have been removed).
+- **Global providers in AppModule**: JwtAuthGuard (APP_GUARD), RouteRoleGuard (APP_GUARD),
+  AuditInterceptor (APP_INTERCEPTOR).
 
 ## Development Setup
 
 ```bash
-# Install dependencies
 pnpm install
-
-# Set required secrets (DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET)
-# Use Replit Secrets tab
-
-# Generate Prisma client
 pnpm prisma generate
-
-# Push schema to database (dev only)
 pnpm prisma db push
-
-# Run dev server (hot reload)
 pnpm run start:dev
-
-# Production build
-pnpm run build && pnpm run start
 ```
 
 ## Required Environment Variables
@@ -86,6 +117,14 @@ pnpm run build && pnpm run start
 | `KLEDO_BASE_URL`     | Kledo API base URL (optional)                |
 | `FONNTE_TOKEN`       | WhatsApp gateway token (optional, secret)    |
 
+## API Endpoints
+- `GET /api/health` — health check (public)
+- `POST /api/auth/login` — login, returns access + refresh token
+- `POST /api/auth/register` — register user
+- `POST /api/auth/refresh` — refresh access token
+- `GET /api/auth/profile` — current user profile
+- `GET /docs` — Swagger UI (all endpoints documented)
+
 ## User Preferences
 - Use pnpm (not npm/yarn)
 - All imports use `.js` extension (ESM)
@@ -93,3 +132,4 @@ pnpm run build && pnpm run start
 - Indonesian language for domain-specific variable names (stok, faktur, gudang, etc.)
 - Prisma Decimal fields for all monetary/quantity values
 - `@db.Decimal(15, 2)` for money, `@db.Decimal(15, 4)` for qty/cost
+- Respond in Bahasa Indonesia
