@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Put, Patch, Param, Body, Query, Inject, UseGuards, Request } from '@nestjs/common';
 import { PosService } from './pos.service.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
 
 @Controller('pos')
 export class PosController {

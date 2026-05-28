@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, Inject, UseGuards } from '@nestjs/common';
 import { PurchasingService } from './purchasing.service.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../../core/decorators/current-user.decorator.js';
 
 @Controller('purchasing')
 @UseGuards(JwtAuthGuard)

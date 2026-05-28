@@ -8,7 +8,7 @@ import { ARAgingService } from './ar-aging.service.js';
 import { APAgingService } from './ap-aging.service.js';
 import { BudgetService } from './budget.service.js';
 import { CreditLimitService } from './credit-limit.service.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
 
 @Controller('finance')
 @UseGuards(JwtAuthGuard)

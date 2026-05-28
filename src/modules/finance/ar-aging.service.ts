@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 export interface AgingBucket { current: number; d30: number; d60: number; d90: number; over90: number }
 

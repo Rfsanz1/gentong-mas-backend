@@ -1,8 +1,8 @@
 import { Controller, Get, Put, Body, Inject, UseGuards } from '@nestjs/common';
 import { DriverAreasService } from './driver-areas.service.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { CanAccessGuard } from '../../common/guards/can-access.guard.js';
-import { CanAccess } from '../../common/decorators/can-access.decorator.js';
+import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
+import { CanAccessGuard } from '../../core/guards/can-access.guard.js';
+import { CanAccess } from '../../core/decorators/can-access.decorator.js';
 
 @Controller('driver-areas')
 @UseGuards(JwtAuthGuard, CanAccessGuard)

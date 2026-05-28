@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 export interface FIFOResult {
   totalCOGS: number;
@@ -71,7 +71,13 @@ export class CostingService {
     const product = await this.prisma.product.findUnique({ where: { id: productId } });
     if (!product) throw new NotFoundException('Produk tidak ditemukan');
 
-    const currentQty = product.stok;
+    // Compute current qty by aggregating all Stock records for this product
+    const stockAgg = await this.prisma.stock.aggregate({
+      where: { productId },
+      _sum: { qty: true },
+    });
+    const currentQty = Number(stockAgg._sum.qty ?? 0);
+
     const currentAvg = Number(product.currentAvgCost);
     const currentValue = currentQty * currentAvg;
     const incomingValue = qtyMasuk * unitCost;
@@ -92,7 +98,14 @@ export class CostingService {
     if (!product) throw new NotFoundException('Produk tidak ditemukan');
 
     const oldCost = Number(product.currentAvgCost);
-    const qty = product.stok;
+
+    // Compute current qty from Stock model
+    const stockAgg = await this.prisma.stock.aggregate({
+      where: { productId },
+      _sum: { qty: true },
+    });
+    const qty = Number(stockAgg._sum.qty ?? 0);
+
     const adjustmentValue = qty * (newCost - oldCost);
 
     await this.prisma.product.update({
@@ -181,7 +194,7 @@ export class CostingService {
       case 'GRN':
         deskripsi = `Penerimaan Barang GRN - ${referenceId ?? ''}`;
         lines = [
-          { accountId: accounts.persediaan, debit: amount, kredit: 0,      deskripsi: 'Persediaan Barang' },
+          { accountId: accounts.persediaan,  debit: amount, kredit: 0,      deskripsi: 'Persediaan Barang' },
           { accountId: accounts.grirClearing, debit: 0,     kredit: amount, deskripsi: 'GR/IR Clearing' },
         ];
         break;
@@ -209,15 +222,15 @@ export class CostingService {
       case 'LANDED_COST':
         deskripsi = `Landed Cost - ${referenceId ?? ''}`;
         lines = [
-          { accountId: accounts.persediaan, debit: amount, kredit: 0,      deskripsi: 'Landed Cost → Persediaan' },
-          { accountId: accounts.hutangDagang, debit: 0,    kredit: amount, deskripsi: 'Hutang / Kas' },
+          { accountId: accounts.persediaan,   debit: amount, kredit: 0,      deskripsi: 'Landed Cost → Persediaan' },
+          { accountId: accounts.hutangDagang, debit: 0,      kredit: amount, deskripsi: 'Hutang / Kas' },
         ];
         break;
       case 'REVALUATION':
         deskripsi = `Revaluasi Stok - Produk ${productId}`;
         lines = [
-          { accountId: amount >= 0 ? accounts.persediaan  : accounts.revaluasi, debit: Math.abs(amount), kredit: 0,            deskripsi: 'Revaluasi Persediaan' },
-          { accountId: amount >= 0 ? accounts.revaluasi   : accounts.persediaan, debit: 0,               kredit: Math.abs(amount), deskripsi: 'Revaluasi Persediaan' },
+          { accountId: amount >= 0 ? accounts.persediaan : accounts.revaluasi, debit: Math.abs(amount), kredit: 0,                 deskripsi: 'Revaluasi Persediaan' },
+          { accountId: amount >= 0 ? accounts.revaluasi  : accounts.persediaan, debit: 0,               kredit: Math.abs(amount),  deskripsi: 'Revaluasi Persediaan' },
         ];
         break;
     }
@@ -250,7 +263,6 @@ export class CostingService {
   private async createRevaluationJournal(
     productId: string, qty: number, oldCost: number, newCost: number, note?: string,
   ) {
-    const amount = qty * Math.abs(newCost - oldCost);
     const isIncrease = newCost > oldCost;
     return this.createAutoJournal(
       'REVALUATION', productId, isIncrease ? qty : -qty, Math.abs(newCost - oldCost), note

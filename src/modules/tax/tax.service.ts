@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { TaxType, TaxLineType } from '@prisma/client';
 import { CreateTaxDto, UpdateTaxDto } from './dto/create-tax.dto.js';
 

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
-import { KledoService } from '../kledo/kledo.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
+import { KledoService } from '../../integrations/kledo/kledo.service.js';
 
 @Injectable()
 export class SalesService {
@@ -106,8 +106,8 @@ export class SalesService {
 
   async getCustomerLocation(token: string) {
     const order = await this.prisma.order.findFirst({
-      where: { customerLocToken: token },
-      select: { customerLat: true, customerLng: true, namaCustomer: true },
+      where: { lokasiToken: token },
+      select: { lokasiLat: true, lokasiLng: true, namaCustomer: true },
     });
     if (!order) throw new NotFoundException('Token tidak valid');
     return order;
@@ -115,8 +115,8 @@ export class SalesService {
 
   async saveCustomerLocation(token: string, lat: string, lng: string) {
     return this.prisma.order.updateMany({
-      where: { customerLocToken: token },
-      data: { customerLat: lat, customerLng: lng, customerLocSharedAt: new Date() },
+      where: { lokasiToken: token },
+      data: { lokasiLat: lat, lokasiLng: lng, lokasiUpdatedAt: new Date() },
     });
   }
 

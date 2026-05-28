@@ -8,7 +8,7 @@ export class NotificationGateway implements OnGatewayConnection {
   private readonly logger = new Logger(NotificationGateway.name);
 
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   constructor(private readonly jwtService: JwtService) {}
 

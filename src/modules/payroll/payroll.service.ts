@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 // PTKP 2024 (tahunan)
 const PTKP: Record<string, number> = {
@@ -85,7 +85,7 @@ export class PayrollService {
 
       // Hitung potongan cuti tidak terambil
       const leaveAbsences = await this.prisma.leaveRequest.count({
-        where: { employeeId: emp.id, status: 'approved', dateFrom: { gte: startDate }, dateTo: { lte: endDate } },
+        where: { employeeId: emp.id, status: 'approved', startDate: { gte: startDate }, endDate: { lte: endDate } },
       });
 
       // Hitung komponen
@@ -251,7 +251,7 @@ export class PayrollService {
       include: { employee: true, period: true },
     });
     const rows = slips.map(s => ({
-      nik: s.employee.nik, nama: s.employee.nama ?? s.employee.name,
+      nik: s.employee.nik, nama: s.employee.name,
       gapok: Number(s.gajiPokok),
       bpjsKesEmployee: Number(s.bpjsKesEmployee), bpjsKesEmployer: Number(s.bpjsKesEmployer),
       bpjsTKEmployee: Number(s.bpjsTKEmployee), bpjsTKEmployer: Number(s.bpjsTKEmployer),

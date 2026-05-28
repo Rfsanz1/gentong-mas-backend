@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Inject, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { NotificationService } from './notification.service.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { PermissionsGuard } from '../../common/guards/permissions.guard.js';
-import { Permissions } from '../../common/decorators/permissions.decorator.js';
-import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
+import { PermissionsGuard } from '../../core/guards/permissions.guard.js';
+import { Permissions } from '../../core/decorators/permissions.decorator.js';
+import { CurrentUser } from '../../core/decorators/current-user.decorator.js';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard, PermissionsGuard)

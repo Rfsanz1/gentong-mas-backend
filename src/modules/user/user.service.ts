@@ -4,8 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
-import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UserService {

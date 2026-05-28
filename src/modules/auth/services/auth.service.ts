@@ -1,8 +1,9 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../../database/prisma.service.js';
-import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../../../core/prisma/prisma.service.js';
+import * as bcrypt from 'bcryptjs';
 
+// Maps role names to their respective frontend application URLs
 const ROLE_APP_MAP: Record<string, string> = {
   admin: 'http://localhost:3000',
   owner: 'http://localhost:3000',

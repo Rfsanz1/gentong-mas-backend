@@ -3,18 +3,18 @@ import { TaxType } from '@prisma/client';
 
 export class CreateTaxDto {
   @IsString()
-  kode: string;
+  kode!: string;
 
   @IsString()
-  nama: string;
+  nama!: string;
 
   @IsEnum(TaxType)
-  tipe: TaxType;
+  tipe!: TaxType;
 
   @IsNumber()
   @Min(0)
   @Max(100)
-  rate: number;
+  rate!: number;
 
   @IsOptional()
   @IsBoolean()
@@ -51,7 +51,7 @@ export class UpdateTaxDto {
 
 export class CalculatePPNDto {
   @IsNumber()
-  amount: number;
+  amount!: number;
 
   @IsOptional()
   @IsNumber()
@@ -60,34 +60,34 @@ export class CalculatePPNDto {
 
 export class CalculatePPh21Dto {
   @IsNumber()
-  grossSalary: number;
+  grossSalary!: number;
 
   @IsString()
-  statusPajak: string;
+  statusPajak!: string;
 }
 
 export class CalculatePPh23Dto {
   @IsNumber()
-  amount: number;
+  amount!: number;
 
   @IsString()
-  jenis: string;
+  jenis!: string;
 }
 
 export class CalculatePPh4a2Dto {
   @IsNumber()
-  amount: number;
+  amount!: number;
 
   @IsString()
-  jenis: string;
+  jenis!: string;
 }
 
 export class ExportEFakturDto {
   @IsString()
-  periode: string;
+  periode!: string;
 }
 
 export class RekapPPNDto {
   @IsString()
-  periode: string;
+  periode!: string;
 }

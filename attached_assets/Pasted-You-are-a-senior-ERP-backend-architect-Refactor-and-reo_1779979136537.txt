@@ -1,0 +1,172 @@
+You are a senior ERP backend architect.
+
+Refactor and reorganize my NestJS + Prisma ERP backend project into a clean, scalable, enterprise-grade structure.
+
+IMPORTANT:
+- Do NOT break existing functionality
+- Keep all existing modules
+- Focus on clean architecture
+- Make folder structure modular and maintainable
+- Separate core system, shared utilities, and business modules properly
+- Prepare structure for future scaling like Accurate, Odoo, SAP, and Kledo
+
+==================================================
+TARGET ARCHITECTURE
+==================================================
+
+src/
+│
+├── main.ts
+├── app.module.ts
+│
+├── core/
+│   ├── database/
+│   ├── prisma/
+│   ├── guards/
+│   ├── interceptors/
+│   ├── filters/
+│   ├── decorators/
+│   ├── middleware/
+│   ├── pipes/
+│   └── config/
+│
+├── common/
+│   ├── dto/
+│   ├── helpers/
+│   ├── constants/
+│   ├── enums/
+│   ├── interfaces/
+│   ├── types/
+│   └── utils/
+│
+├── modules/
+│   │
+│   ├── auth/
+│   │   ├── controllers/
+│   │   ├── services/
+│   │   ├── dto/
+│   │   ├── guards/
+│   │   ├── strategies/
+│   │   ├── entities/
+│   │   └── auth.module.ts
+│   │
+│   ├── users/
+│   ├── roles/
+│   ├── permissions/
+│   │
+│   ├── inventory/
+│   │   ├── products/
+│   │   ├── categories/
+│   │   ├── warehouses/
+│   │   ├── stock/
+│   │   ├── stock-movements/
+│   │   └── inventory.module.ts
+│   │
+│   ├── sales/
+│   │   ├── sales-orders/
+│   │   ├── invoices/
+│   │   ├── customers/
+│   │   ├── payments/
+│   │   └── sales.module.ts
+│   │
+│   ├── purchasing/
+│   │   ├── purchase-orders/
+│   │   ├── suppliers/
+│   │   ├── receiving/
+│   │   └── purchasing.module.ts
+│   │
+│   ├── pos/
+│   ├── finance/
+│   ├── hr/
+│   ├── payroll/
+│   ├── crm/
+│   └── reports/
+│
+├── integrations/
+│   ├── whatsapp/
+│   ├── marketplace/
+│   ├── payment-gateway/
+│   └── shipping/
+│
+└── jobs/
+    ├── queues/
+    ├── schedulers/
+    └── workers/
+
+==================================================
+DATABASE REFACTOR
+==================================================
+
+Refactor inventory structure:
+
+REMOVE:
+- stock field directly from Product model
+- warehouseId directly inside Product
+
+CREATE:
+- Warehouse model
+- Stock model
+- StockMovement model
+
+RULES:
+- One product can exist in multiple warehouses
+- All stock changes must go through StockMovement
+- Never directly modify product stock
+- Stock becomes calculated/managed through movements
+
+==================================================
+BUSINESS FLOW
+==================================================
+
+Sales Flow:
+Sales Order
+-> Invoice
+-> Delivery
+-> Stock Movement OUT
+
+Purchase Flow:
+Purchase Order
+-> Receiving
+-> Stock Movement IN
+
+==================================================
+CODING STANDARDS
+==================================================
+
+- Use clean NestJS module structure
+- Use service-repository pattern if needed
+- Separate DTO properly
+- Separate entities properly
+- Use consistent naming
+- Use English naming only
+- Use scalable Prisma schema
+- Add comments for important architecture decisions
+- Remove duplicated logic
+- Keep code readable
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+1. Refactor folder structure
+2. Refactor Prisma schema
+3. Clean import paths
+4. Improve module separation
+5. Add scalable inventory architecture
+6. Add proper stock movement flow
+7. Keep backend enterprise-ready
+8. Explain all major changes clearly
+9. Generate cleaner modular architecture
+10. Do not delete existing business logic unless necessary
+
+IMPORTANT:
+This project is an ERP system for:
+- Owner
+- Admin
+- Sales
+- Warehouse
+- Cashier
+- Driver
+- Finance
+
+Make the backend scalable for mobile apps, ERP dashboard, POS, and warehouse apps.

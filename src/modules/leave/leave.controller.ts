@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Param, Body, Query, Inject, UseGuards } from '@nestjs/common';
 import { LeaveService } from './leave.service.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
+import { CurrentUser } from '../../core/decorators/current-user.decorator.js';
 
 @Controller('leave')
 @UseGuards(JwtAuthGuard)

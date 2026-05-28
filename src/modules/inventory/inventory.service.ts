@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 @Injectable()
 export class InventoryService {
@@ -11,12 +11,12 @@ export class InventoryService {
     const where: any = {};
     if (search) where.name = { contains: search, mode: 'insensitive' };
     if (categoryId) where.categoryId = categoryId;
-    if (warehouseId) where.warehouseId = warehouseId;
+    if (warehouseId) where.stocks = { some: { warehouseId } };
     if (active !== undefined) where.active = active === 'true';
     const [data, total] = await Promise.all([
       this.prisma.product.findMany({
         where, skip, take: Number(limit),
-        include: { category: true, unit: true, warehouse: true },
+        include: { category: true, unit: true, stocks: { include: { warehouse: true } } },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.product.count({ where }),
@@ -27,7 +27,12 @@ export class InventoryService {
   async getProduct(id: string) {
     const p = await this.prisma.product.findUnique({
       where: { id },
-      include: { category: true, unit: true, warehouse: true, stockMovements: { take: 10, orderBy: { createdAt: 'desc' } } },
+      include: {
+        category: true,
+        unit: true,
+        stocks: { include: { warehouse: true } },
+        stockMovements: { take: 10, orderBy: { createdAt: 'desc' } },
+      },
     });
     if (!p) throw new NotFoundException('Produk tidak ditemukan');
     return p;
@@ -43,17 +48,42 @@ export class InventoryService {
     return this.prisma.product.update({ where: { id }, data: { active: false } });
   }
 
-  async updateStok(id: string, qty: number, type: 'in' | 'out', note?: string) {
-    const product = await this.prisma.product.findUnique({ where: { id } });
+  /**
+   * Update stock for a product in a specific warehouse.
+   * RULE: All stock changes MUST go through this method to ensure
+   *       a StockMovement audit trail is always created.
+   */
+  async updateStok(
+    productId: string,
+    qty: number,
+    type: 'in' | 'out',
+    note?: string,
+    warehouseId?: string,
+  ) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
     if (!product) throw new NotFoundException('Produk tidak ditemukan');
-    const newStok = type === 'in' ? product.stok + qty : product.stok - qty;
-    await Promise.all([
-      this.prisma.product.update({ where: { id }, data: { stok: newStok } }),
-      this.prisma.stockMovement.create({
-        data: { productId: id, type, qty, note: note ?? '' },
-      }),
-    ]);
-    return { stok: newStok };
+
+    let newQty = qty;
+
+    if (warehouseId) {
+      const existing = await this.prisma.stock.findUnique({
+        where: { productId_warehouseId: { productId, warehouseId } },
+      });
+      const currentQty = Number(existing?.qty ?? 0);
+      newQty = type === 'in' ? currentQty + qty : Math.max(0, currentQty - qty);
+
+      await this.prisma.stock.upsert({
+        where: { productId_warehouseId: { productId, warehouseId } },
+        update: { qty: newQty },
+        create: { productId, warehouseId, qty: newQty },
+      });
+    }
+
+    await this.prisma.stockMovement.create({
+      data: { productId, warehouseId: warehouseId ?? null, type, qty, note: note ?? '' },
+    });
+
+    return { qty: newQty };
   }
 
   async getBrands() {
@@ -101,7 +131,12 @@ export class InventoryService {
 
   async createStockOpname(dto: any) {
     return this.prisma.stockOpname.create({
-      data: { date: dto.date, warehouseId: dto.warehouseId, note: dto.note, items: { create: dto.items } },
+      data: {
+        date: dto.date,
+        warehouseId: dto.warehouseId,
+        note: dto.note,
+        items: { create: dto.items },
+      },
       include: { items: { include: { product: true } } },
     });
   }
@@ -119,13 +154,20 @@ export class InventoryService {
   }
 
   async getStats() {
-    const [totalProducts, totalStokResult] = await Promise.all([
-      this.prisma.product.count({ where: { active: true } }),
-      this.prisma.product.aggregate({ _sum: { stok: true }, where: { active: true } }),
-    ]);
-    const lowStock = await this.prisma.product.count({
-      where: { active: true, stok: { lte: 5 } },
+    const totalProducts = await this.prisma.product.count({ where: { active: true } });
+
+    const totalStokResult = await this.prisma.stock.aggregate({ _sum: { qty: true } });
+
+    const productStocks = await this.prisma.stock.groupBy({
+      by: ['productId'],
+      _sum: { qty: true },
     });
-    return { totalProducts, lowStock, totalStok: totalStokResult._sum.stok ?? 0 };
+    const lowStock = productStocks.filter((ps) => Number(ps._sum.qty ?? 0) <= 5).length;
+
+    return {
+      totalProducts,
+      lowStock,
+      totalStok: Number(totalStokResult._sum.qty ?? 0),
+    };
   }
 }

@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 @Injectable()
 export class LeaveService {
@@ -46,14 +46,14 @@ export class LeaveService {
     const allocations = await this.prisma.leaveAllocation.findMany({ where: { employeeId, year }, include: { leaveType: true } });
     const taken = await this.prisma.leaveRequest.groupBy({
       by: ['leaveTypeId'],
-      where: { employeeId, status: 'validated', dateFrom: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) } },
-      _sum: { numberOfDays: true },
+      where: { employeeId, status: 'validated', startDate: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) } },
+      _sum: { days: true },
     });
     return allocations.map(a => ({
       leaveType: a.leaveType.name,
-      allocated: Number(a.numberOfDays),
-      taken: Number(taken.find(t => t.leaveTypeId === a.leaveTypeId)?._sum.numberOfDays ?? 0),
-      remaining: Number(a.numberOfDays) - Number(taken.find(t => t.leaveTypeId === a.leaveTypeId)?._sum.numberOfDays ?? 0),
+      allocated: Number(a.totalDays),
+      taken: Number(taken.find(t => t.leaveTypeId === a.leaveTypeId)?._sum.days ?? 0),
+      remaining: Number(a.totalDays) - Number(taken.find(t => t.leaveTypeId === a.leaveTypeId)?._sum.days ?? 0),
     }));
   }
 

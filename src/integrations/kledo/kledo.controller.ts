@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Query, Inject, UseGuards } from '@nestjs/common';
 import { KledoService } from './kledo.service.js';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
 
 @Controller('kledo')
 export class KledoController {

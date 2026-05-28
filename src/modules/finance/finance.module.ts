@@ -10,7 +10,7 @@ import { ARAgingService } from './ar-aging.service.js';
 import { APAgingService } from './ap-aging.service.js';
 import { BudgetService } from './budget.service.js';
 import { CreditLimitService } from './credit-limit.service.js';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 @Module({
   controllers: [FinanceController],

@@ -7,7 +7,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) { callback(null, true); return; }
       const allowed =
         origin.startsWith('http://localhost:') ||
@@ -31,7 +31,7 @@ async function bootstrap() {
   const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || 1000);
   const requestCounters = new Map<string, { count: number; windowStart: number }>();
 
-  app.use((req, res, next) => {
+  app.use((req: any, res: any, next: any) => {
     const forwarded = req.headers['x-forwarded-for']?.toString().split(',')[0].trim();
     const key = forwarded || req.ip || 'global';
     const now = Date.now();

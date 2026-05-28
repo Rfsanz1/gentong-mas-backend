@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 export interface StockValuationRow {
   productId: string;
@@ -39,113 +39,140 @@ export class ValuationService {
     rows: StockValuationRow[];
   }> {
     const asOf = date ?? new Date();
-    const where: any = { active: true, stok: { gt: 0 } };
-    if (warehouseId) where.warehouseId = warehouseId;
 
-    const products = await this.prisma.product.findMany({
-      where,
-      include: { category: true, warehouse: true },
-      orderBy: { name: 'asc' },
+    // Query Stock records (product × warehouse), optionally filtered by warehouse
+    const stockWhere: any = { qty: { gt: 0 }, product: { active: true } };
+    if (warehouseId) stockWhere.warehouseId = warehouseId;
+
+    const stocks = await this.prisma.stock.findMany({
+      where: stockWhere,
+      include: {
+        product: { include: { category: true } },
+        warehouse: true,
+      },
+      orderBy: { product: { name: 'asc' } },
     });
 
-    const rows: StockValuationRow[] = products.map((p) => {
+    const rows: StockValuationRow[] = stocks.map((s) => {
+      const p = s.product;
       const unitCost = Number(p.currentAvgCost) || Number(p.hargaBeli) || 0;
-      const totalValue = p.stok * unitCost;
+      const qty = Number(s.qty);
       return {
         productId: p.id,
         sku: p.sku,
         name: p.name,
-        warehouse: p.warehouse?.name,
+        warehouse: s.warehouse?.name,
         category: p.category?.name,
-        stok: p.stok,
+        stok: qty,
         unitCost,
-        totalValue,
+        totalValue: qty * unitCost,
         costingMethod: p.costingMethod,
       };
     });
 
-    const totalValue = rows.reduce((s, r) => s + r.totalValue, 0);
+    const totalValue = rows.reduce((sum, r) => sum + r.totalValue, 0);
     return { asOf, totalValue, rows };
   }
 
   // ─── STOCK AGING: umur stok per produk per lot ────────────────────────────
   async getStockAgingReport(warehouseId?: string): Promise<StockAgingRow[]> {
+    // If warehouseId provided, first get product IDs that have stock in that warehouse
+    let productIdFilter: string[] | undefined;
+    if (warehouseId) {
+      const stocks = await this.prisma.stock.findMany({
+        where: { warehouseId, qty: { gt: 0 } },
+        select: { productId: true },
+      });
+      productIdFilter = stocks.map((s) => s.productId);
+      if (productIdFilter.length === 0) return [];
+    }
+
     const lots = await this.prisma.stockLot.findMany({
-      where: { qtySisa: { gt: 0 } },
-      include: { product: { include: { warehouse: true } } },
+      where: {
+        qtySisa: { gt: 0 },
+        ...(productIdFilter ? { productId: { in: productIdFilter } } : {}),
+      },
+      include: { product: true },
       orderBy: { createdAt: 'asc' },
     });
 
     const now = new Date();
 
-    return lots
-      .filter((lot) => !warehouseId || lot.product?.warehouseId === warehouseId)
-      .map((lot) => {
-        const ageDays = Math.floor((now.getTime() - lot.createdAt.getTime()) / 86_400_000);
-        const expiryDate = lot.expiryDate ?? undefined;
-        const expiredIn = expiryDate
-          ? Math.floor((expiryDate.getTime() - now.getTime()) / 86_400_000)
-          : undefined;
+    return lots.map((lot) => {
+      const ageDays = Math.floor((now.getTime() - lot.createdAt.getTime()) / 86_400_000);
+      const expiryDate = lot.expiryDate ?? undefined;
+      const expiredIn = expiryDate
+        ? Math.floor((expiryDate.getTime() - now.getTime()) / 86_400_000)
+        : undefined;
 
-        let ageCategory: StockAgingRow['ageCategory'] = 'fresh';
-        if (ageDays > 180) ageCategory = 'critical';
-        else if (ageDays > 90) ageCategory = 'slow';
-        else if (ageDays > 30) ageCategory = 'normal';
+      let ageCategory: StockAgingRow['ageCategory'] = 'fresh';
+      if (ageDays > 180) ageCategory = 'critical';
+      else if (ageDays > 90) ageCategory = 'slow';
+      else if (ageDays > 30) ageCategory = 'normal';
 
-        if (expiredIn !== undefined && expiredIn <= 30) ageCategory = 'critical';
-        else if (expiredIn !== undefined && expiredIn <= 90) ageCategory = 'slow';
+      if (expiredIn !== undefined && expiredIn <= 30) ageCategory = 'critical';
+      else if (expiredIn !== undefined && expiredIn <= 90) ageCategory = 'slow';
 
-        return {
-          productId: lot.productId,
-          sku: lot.product.sku,
-          name: lot.product.name,
-          nomorLot: lot.nomorLot,
-          qtyAwal: Number(lot.qtyAwal),
-          qtySisa: Number(lot.qtySisa),
-          unitCost: Number(lot.unitCost),
-          totalValue: Number(lot.qtySisa) * Number(lot.unitCost),
-          ageDays,
-          expiryDate,
-          expiredIn,
-          ageCategory,
-        };
-      });
+      return {
+        productId: lot.productId,
+        sku: lot.product.sku,
+        name: lot.product.name,
+        nomorLot: lot.nomorLot,
+        qtyAwal: Number(lot.qtyAwal),
+        qtySisa: Number(lot.qtySisa),
+        unitCost: Number(lot.unitCost),
+        totalValue: Number(lot.qtySisa) * Number(lot.unitCost),
+        ageDays,
+        expiryDate,
+        expiredIn,
+        ageCategory,
+      };
+    });
   }
 
   // ─── SLOW MOVING: produk tidak bergerak > X hari ─────────────────────────
   async getSlowMovingItems(days = 90, warehouseId?: string) {
     const cutoff = new Date(Date.now() - days * 86_400_000);
 
-    const allProducts = await this.prisma.product.findMany({
-      where: {
-        active: true,
-        stok: { gt: 0 },
-        ...(warehouseId ? { warehouseId } : {}),
-      },
+    // Query through Stock model to respect multi-warehouse architecture
+    const stockWhere: any = { qty: { gt: 0 }, product: { active: true } };
+    if (warehouseId) stockWhere.warehouseId = warehouseId;
+
+    const stocks = await this.prisma.stock.findMany({
+      where: stockWhere,
       include: {
-        warehouse: true,
-        category: true,
-        stockMovements: {
-          where: { createdAt: { gte: cutoff } },
-          take: 1,
+        product: {
+          include: {
+            category: true,
+            stockMovements: {
+              where: { createdAt: { gte: cutoff } },
+              take: 1,
+            },
+          },
         },
+        warehouse: true,
       },
     });
 
-    const slowMovers = allProducts.filter((p) => p.stockMovements.length === 0);
-
-    return slowMovers.map((p) => ({
-      productId: p.id,
-      sku: p.sku,
-      name: p.name,
-      category: p.category?.name,
-      warehouse: p.warehouse?.name,
-      stok: p.stok,
-      unitCost: Number(p.currentAvgCost) || Number(p.hargaBeli),
-      totalValue: p.stok * (Number(p.currentAvgCost) || Number(p.hargaBeli)),
-      daysSinceMovement: days,
-      costingMethod: p.costingMethod,
-    }));
+    return stocks
+      .filter((s) => s.product.stockMovements.length === 0)
+      .map((s) => {
+        const p = s.product;
+        const unitCost = Number(p.currentAvgCost) || Number(p.hargaBeli);
+        const qty = Number(s.qty);
+        return {
+          productId: p.id,
+          sku: p.sku,
+          name: p.name,
+          category: p.category?.name,
+          warehouse: s.warehouse?.name,
+          stok: qty,
+          unitCost,
+          totalValue: qty * unitCost,
+          daysSinceMovement: days,
+          costingMethod: p.costingMethod,
+        };
+      });
   }
 
   // ─── STOCK LOT LIST ───────────────────────────────────────────────────────
@@ -158,7 +185,7 @@ export class ValuationService {
     const [data, total] = await Promise.all([
       this.prisma.stockLot.findMany({
         where, skip, take: Number(limit),
-        include: { product: { include: { warehouse: true, category: true } } },
+        include: { product: { include: { category: true } } },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.stockLot.count({ where }),

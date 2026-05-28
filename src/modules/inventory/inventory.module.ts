@@ -4,7 +4,7 @@ import { InventoryService } from './inventory.service.js';
 import { CostingService } from './costing.service.js';
 import { LandedCostService } from './landed-cost.service.js';
 import { ValuationService } from './valuation.service.js';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 @Module({
   controllers: [InventoryController],

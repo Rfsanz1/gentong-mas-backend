@@ -13,7 +13,7 @@ import { PurchasingModule } from './modules/purchasing/purchasing.module.js';
 import { CustomersModule } from './modules/customers/customers.module.js';
 import { HrModule } from './modules/hr/hr.module.js';
 import { FinanceModule } from './modules/finance/finance.module.js';
-import { KledoModule } from './modules/kledo/kledo.module.js';
+import { KledoModule } from './integrations/kledo/kledo.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { DriverAreasModule } from './modules/driver-areas/driver-areas.module.js';
 import { PosModule } from './modules/pos/pos.module.js';
@@ -31,9 +31,9 @@ import { PayrollModule } from './modules/payroll/payroll.module.js';
 import { AssetModule } from './modules/asset/asset.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { BranchModule } from './modules/branch/branch.module.js';
-import { CanAccessGuard } from './common/guards/can-access.guard.js';
-import { RouteRoleGuard } from './common/guards/route-role.guard.js';
-import { PrismaService } from './database/prisma.service.js';
+import { CanAccessGuard } from './core/guards/can-access.guard.js';
+import { RouteRoleGuard } from './core/guards/route-role.guard.js';
+import { PrismaService } from './core/prisma/prisma.service.js';
 import { APP_GUARD } from '@nestjs/core';
 
 @Module({

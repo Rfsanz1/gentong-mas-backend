@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 @Injectable()
 export class RecruitmentService {
@@ -20,34 +20,34 @@ export class RecruitmentService {
     const { jobId, stage, page = 1, limit = 20 } = query;
     const skip = (Number(page) - 1) * Number(limit);
     const where: any = {};
-    if (jobId) where.jobId = jobId;
+    if (jobId) where.jobPositionId = jobId;
     if (stage) where.stage = stage;
     const [data, total] = await Promise.all([
-      this.prisma.jobApplication.findMany({ where, skip, take: Number(limit), include: { job: true }, orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }] }),
-      this.prisma.jobApplication.count({ where }),
+      this.prisma.application.findMany({ where, skip, take: Number(limit), include: { jobPosition: true }, orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }] }),
+      this.prisma.application.count({ where }),
     ]);
     return { data, total, page: Number(page), totalPages: Math.ceil(total / Number(limit)) };
   }
 
   async getApplication(id: string) {
-    const app = await this.prisma.jobApplication.findUnique({ where: { id }, include: { job: true } });
+    const app = await this.prisma.application.findUnique({ where: { id }, include: { jobPosition: true } });
     if (!app) throw new NotFoundException('Lamaran tidak ditemukan');
     return app;
   }
 
-  async createApplication(dto: any) { return this.prisma.jobApplication.create({ data: dto, include: { job: true } }); }
-  async updateApplication(id: string, dto: any) { return this.prisma.jobApplication.update({ where: { id }, data: dto, include: { job: true } }); }
+  async createApplication(dto: any) { return this.prisma.application.create({ data: dto, include: { jobPosition: true } }); }
+  async updateApplication(id: string, dto: any) { return this.prisma.application.update({ where: { id }, data: dto, include: { jobPosition: true } }); }
 
-  async advanceStage(id: string, stage: string) { return this.prisma.jobApplication.update({ where: { id }, data: { stage } }); }
-  async refuseApplication(id: string, reason: string) { return this.prisma.jobApplication.update({ where: { id }, data: { stage: 'refused', refuseReason: reason } }); }
+  async advanceStage(id: string, stage: string) { return this.prisma.application.update({ where: { id }, data: { stage } }); }
+  async refuseApplication(id: string, reason: string) { return this.prisma.application.update({ where: { id }, data: { stage: 'refused', refuseReason: reason } }); }
 
   async getStats() {
     const [totalPositions, openPositions, totalApps] = await Promise.all([
       this.prisma.jobPosition.count(),
       this.prisma.jobPosition.count({ where: { status: 'open' } }),
-      this.prisma.jobApplication.count(),
+      this.prisma.application.count(),
     ]);
-    const stageCount = await this.prisma.jobApplication.groupBy({ by: ['stage'], _count: true });
+    const stageCount = await this.prisma.application.groupBy({ by: ['stage'], _count: true });
     return { totalPositions, openPositions, totalApps, stageCount };
   }
 }

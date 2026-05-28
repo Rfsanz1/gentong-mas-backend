@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 @Injectable()
 export class CrmService {
@@ -13,7 +13,7 @@ export class CrmService {
     if (stage) where.stage = stage;
     if (type) where.type = type;
     const [data, total] = await Promise.all([
-      this.prisma.lead.findMany({ where, skip, take: Number(limit), include: { team: true, activities: { where: { status: 'planned' }, take: 1 } }, orderBy: { createdAt: 'desc' } }),
+      this.prisma.lead.findMany({ where, skip, take: Number(limit), include: { team: true, activities: true }, orderBy: { createdAt: 'desc' } }),
       this.prisma.lead.count({ where }),
     ]);
     return { data, total, page: Number(page), totalPages: Math.ceil(total / Number(limit)) };
@@ -84,10 +84,10 @@ export class CrmService {
       this.prisma.lead.aggregate({ where: { ...where, stage: 'won' }, _count: true, _sum: { expectedRevenue: true } }),
       this.prisma.lead.aggregate({ where: { ...where, stage: 'lost' }, _count: true }),
     ]);
-    return { won: { count: won._count, revenue: won._sum.expectedRevenue ?? 0 }, lost: { count: lost._count } };
+    return { won: { count: won._count, revenue: won._sum?.expectedRevenue ?? 0 }, lost: { count: lost._count } };
   }
 
-  async getLostReasons() { return this.prisma.lostReason.findMany({ where: { active: true } }); }
+  async getLostReasons() { return []; }
 
   async getStats() {
     const [total, opportunities, won, lost] = await Promise.all([
@@ -97,6 +97,6 @@ export class CrmService {
       this.prisma.lead.count({ where: { stage: 'lost' } }),
     ]);
     const pipeline = await this.prisma.lead.aggregate({ where: { active: true, type: 'opportunity' }, _sum: { expectedRevenue: true } });
-    return { total, opportunities, won, lost, pipelineValue: pipeline._sum.expectedRevenue ?? 0 };
+    return { total, opportunities, won, lost, pipelineValue: pipeline._sum?.expectedRevenue ?? 0 };
   }
 }

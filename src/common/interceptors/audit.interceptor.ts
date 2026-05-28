@@ -1,6 +1,6 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
-import { PrismaService } from '../../database/prisma.service.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 const AUDIT_MODULES = ['finance', 'inventory', 'sales', 'purchasing', 'payroll', 'assets', 'accounting', 'tax'];
 

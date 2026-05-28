@@ -10,10 +10,10 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
-import { RolesGuard } from '../../common/guards/roles.guard.js';
-import { Roles } from '../../common/decorators/roles.decorator.js';
-import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../../core/guards/roles.guard.js';
+import { Roles } from '../../core/decorators/roles.decorator.js';
+import { CurrentUser } from '../../core/decorators/current-user.decorator.js';
 import { UserService } from './user.service.js';
 
 @Controller('users')
