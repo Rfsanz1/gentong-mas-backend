@@ -1,10 +1,13 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, Inject, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service.js';
 import { CostingService } from './costing.service.js';
 import { LandedCostService } from './landed-cost.service.js';
 import { ValuationService } from './valuation.service.js';
 import { JwtAuthGuard } from '../../core/guards/jwt-auth.guard.js';
 
+@ApiTags('inventory')
+@ApiBearerAuth('JWT')
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)
 export class InventoryController {

@@ -1,9 +1,13 @@
 import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
+import { InventoryService } from '../inventory/inventory.service.js';
 
 @Injectable()
 export class PurchasingService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(InventoryService) private readonly inventoryService: InventoryService,
+  ) {}
 
   async generatePONumber(): Promise<string> {
     const year = new Date().getFullYear();
@@ -12,12 +16,7 @@ export class PurchasingService {
       ? `${year + 1}-01-01`
       : `${year}-${String(Number(month) + 1).padStart(2, '0')}-01`;
     const latest = await this.prisma.purchaseOrder.findFirst({
-      where: {
-        createdAt: {
-          gte: new Date(`${year}-${month}-01`),
-          lt: new Date(nextMonth),
-        },
-      },
+      where: { createdAt: { gte: new Date(`${year}-${month}-01`), lt: new Date(nextMonth) } },
       orderBy: { createdAt: 'desc' },
     });
     const seq = latest ? Number(latest.noPo.split('/')[3]) + 1 : 1;
@@ -58,8 +57,12 @@ export class PurchasingService {
     const tax = (subtotal - discount) * 0.11;
     const totalHarga = subtotal - discount + tax;
     const noPo = await this.generatePONumber();
+    const itemsWithSubtotal = items.map((it: any) => ({
+      ...it,
+      subtotal: it.subtotal ?? Number(it.qty) * Number(it.hargaBeli),
+    }));
     return this.prisma.purchaseOrder.create({
-      data: { ...poData, noPo, totalHarga, items: { create: items } },
+      data: { ...poData, noPo, totalHarga, items: { create: itemsWithSubtotal } },
       include: { supplier: true, items: { include: { product: true } } },
     });
   }
@@ -76,6 +79,9 @@ export class PurchasingService {
   }
 
   async cancelPurchaseOrder(id: string) {
+    const po = await this.prisma.purchaseOrder.findUnique({ where: { id } });
+    if (!po) throw new NotFoundException('PO tidak ditemukan');
+    if (po.status === 'received') throw new BadRequestException('PO yang sudah diterima tidak dapat dibatalkan');
     return this.prisma.purchaseOrder.update({ where: { id }, data: { status: 'cancelled' } });
   }
 
@@ -104,8 +110,73 @@ export class PurchasingService {
 
   async createGoodsReceipt(dto: any) {
     const { items, ...grData } = dto;
-    const noGr = `GR/${new Date().getFullYear()}/${String(Date.now()).slice(-5)}`;
-    return this.prisma.goodsReceipt.create({ data: { ...grData, noGr, items: { create: items ?? [] } } });
+    const noGr = `GR/${new Date().getFullYear()}/${String(Date.now()).slice(-6)}`;
+    return this.prisma.goodsReceipt.create({
+      data: { ...grData, noGr, items: { create: items ?? [] } },
+      include: { purchaseOrder: true, items: { include: { product: true } } },
+    });
+  }
+
+  /**
+   * PURCHASE FLOW — STEP 3: Confirm Goods Receipt → trigger StockMovement IN
+   *
+   * Flow: PurchaseOrder → GoodsReceipt → [confirmGoodsReceipt] → StockMovement IN → Stock Updated
+   *
+   * For each item with a productId and qtyReceived > 0:
+   *   - Calls InventoryService.updateStok(type: 'in') which creates StockMovement
+   *   - Updates PurchaseOrderItem.qtyReceived
+   * Then updates GR status to 'confirmed' and PO status to 'received'.
+   */
+  async confirmGoodsReceipt(id: string, warehouseId?: string) {
+    const gr = await this.prisma.goodsReceipt.findUnique({
+      where: { id },
+      include: {
+        purchaseOrder: { include: { warehouse: true } },
+        items: { include: { product: true } },
+      },
+    });
+    if (!gr) throw new NotFoundException('Goods Receipt tidak ditemukan');
+    if (gr.status === 'confirmed') throw new BadRequestException('Goods Receipt sudah dikonfirmasi');
+
+    const targetWarehouseId = warehouseId ?? gr.purchaseOrder.warehouseId;
+    if (!targetWarehouseId) {
+      throw new BadRequestException('Warehouse harus ditentukan untuk penerimaan barang');
+    }
+
+    const movements: any[] = [];
+
+    for (const item of gr.items) {
+      if (!item.productId || item.qtyReceived <= 0) continue;
+
+      const movement = await this.inventoryService.updateStok(
+        item.productId,
+        item.qtyReceived,
+        'in',
+        `Penerimaan: ${gr.noGr} | PO: ${gr.purchaseOrder.noPo}`,
+        targetWarehouseId,
+        gr.id,
+      );
+      movements.push(movement);
+
+      await this.prisma.purchaseOrderItem.updateMany({
+        where: { purchaseOrderId: gr.purchaseOrderId, productId: item.productId },
+        data: { qtyReceived: { increment: item.qtyReceived } },
+      });
+    }
+
+    const [confirmedGr] = await Promise.all([
+      this.prisma.goodsReceipt.update({
+        where: { id },
+        data: { status: 'confirmed' },
+        include: { items: { include: { product: true } }, purchaseOrder: true },
+      }),
+      this.prisma.purchaseOrder.update({
+        where: { id: gr.purchaseOrderId },
+        data: { status: 'received' },
+      }),
+    ]);
+
+    return { goodsReceipt: confirmedGr, movements, warehouseId: targetWarehouseId };
   }
 
   async getStats() {
@@ -119,9 +190,10 @@ export class PurchasingService {
   }
 
   async getSuppliers(query: any) {
-    const { search, page = 1, limit = 20 } = query;
+    const { search, active, page = 1, limit = 20 } = query;
     const skip = (Number(page) - 1) * Number(limit);
-    const where: any = { active: true };
+    const where: any = {};
+    if (active !== 'false') where.active = true;
     if (search) where.name = { contains: search, mode: 'insensitive' };
     const [data, total] = await Promise.all([
       this.prisma.supplier.findMany({ where, skip, take: Number(limit), orderBy: { name: 'asc' } }),

@@ -204,7 +204,7 @@ model StockMovement {
   warehouseId String?
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
   type        String
-  qty         Int
+  qty         Decimal   @db.Decimal(15,4)
   note        String?
   referenceId String?
   createdAt   DateTime   @default(now())

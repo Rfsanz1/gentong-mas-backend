@@ -1,11 +1,14 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ResponseInterceptor } from './core/interceptors/response.interceptor.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
+
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin) { callback(null, true); return; }
@@ -23,9 +26,11 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Branch-Id'],
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: false }));
+  app.useGlobalInterceptors(new ResponseInterceptor());
 
   const rateLimitWindow = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
   const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || 1000);
@@ -44,17 +49,48 @@ async function bootstrap() {
       requestCounters.set(key, counter);
     }
 
-    if (requestCounters.get(key)?.count! > rateLimitMax) {
-      res.status(429).json({ message: 'Too many requests. Please try again later.' });
+    if ((requestCounters.get(key)?.count ?? 0) > rateLimitMax) {
+      res.status(429).json({ success: false, message: 'Too many requests. Please try again later.' });
       return;
     }
 
-    res.setHeader('X-Powered-By', 'ERP Modern Backend');
+    res.setHeader('X-Powered-By', 'Gentong Mas ERP');
     next();
   });
 
-  await app.listen(process.env.PORT ? Number(process.env.PORT) : 4000);
-  console.log(`Modern backend running on http://localhost:${process.env.PORT ?? 4000}`);
+  // ─── Swagger ────────────────────────────────────────────────────────────────
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Gentong Mas ERP API')
+    .setDescription('Backend API for Gentong Mas ERP System')
+    .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
+      'JWT',
+    )
+    .addTag('auth', 'Authentication & Authorization')
+    .addTag('inventory', 'Inventory & Stock Management')
+    .addTag('sales', 'Sales Orders & Invoices')
+    .addTag('purchasing', 'Purchase Orders & Goods Receipt')
+    .addTag('finance', 'Finance & Accounting')
+    .addTag('payroll', 'Payroll & HR')
+    .addTag('pos', 'Point of Sale')
+    .addTag('assets', 'Fixed Asset Management')
+    .addTag('tax', 'Tax Engine')
+    .addTag('manufacturing', 'Manufacturing & Production')
+    .addTag('crm', 'CRM & Leads')
+    .addTag('helpdesk', 'Helpdesk & Tickets')
+    .addTag('users', 'User & Role Management')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+
+  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
+  await app.listen(port);
+  console.log(`Gentong Mas ERP running on http://localhost:${port}`);
+  console.log(`Swagger docs: http://localhost:${port}/docs`);
 }
 
 bootstrap();

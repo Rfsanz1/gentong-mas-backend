@@ -32,6 +32,7 @@ import { AssetModule } from './modules/asset/asset.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { BranchModule } from './modules/branch/branch.module.js';
 import { CanAccessGuard } from './core/guards/can-access.guard.js';
+import { JwtAuthGuard } from './core/guards/jwt-auth.guard.js';
 import { RouteRoleGuard } from './core/guards/route-role.guard.js';
 import { PrismaService } from './core/prisma/prisma.service.js';
 import { APP_GUARD } from '@nestjs/core';
@@ -74,6 +75,7 @@ import { APP_GUARD } from '@nestjs/core';
   providers: [
     PrismaService,
     CanAccessGuard,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RouteRoleGuard },
   ],
 })

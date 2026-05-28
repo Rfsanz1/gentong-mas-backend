@@ -1,13 +1,16 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { KledoService } from '../../integrations/kledo/kledo.service.js';
+import { InventoryService } from '../inventory/inventory.service.js';
 
 @Injectable()
 export class SalesService {
   private readonly logger = new Logger(SalesService.name);
+
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(KledoService) private readonly kledo: KledoService,
+    @Inject(InventoryService) private readonly inventoryService: InventoryService,
   ) {}
 
   async getOrders(query: any) {
@@ -43,11 +46,15 @@ export class SalesService {
       nama: it.nama ?? it.name ?? '',
       qty: Number(it.qty) || 1,
       harga: it.harga ?? it.price ?? 0,
-      subtotal: it.subtotal ?? (it.qty * (it.harga ?? it.price ?? 0)),
+      subtotal: it.subtotal ?? (Number(it.qty) * Number(it.harga ?? it.price ?? 0)),
       ...(it.productId ? { productId: it.productId } : {}),
     }));
     const order = await this.prisma.order.create({
-      data: { ...orderData, items: items ?? [], orderItems: dbItems.length ? { create: dbItems } : undefined },
+      data: {
+        ...orderData,
+        items: items ?? [],
+        orderItems: dbItems.length ? { create: dbItems } : undefined,
+      },
       include: { orderItems: { include: { product: true } } },
     });
 
@@ -97,6 +104,50 @@ export class SalesService {
     return this.prisma.order.update({ where: { id }, data: dto });
   }
 
+  /**
+   * SALES FLOW — STEP 3: Confirm Delivery → trigger StockMovement OUT
+   *
+   * Flow: Order → Invoice → [confirmOrderDelivery] → StockMovement OUT → Stock Updated
+   *
+   * For each OrderItem with a productId:
+   *   - Calls InventoryService.updateStok(type: 'out') which creates StockMovement
+   *   - Throws if stock is insufficient (no silent deduction)
+   * Then updates Order status to 'delivered'.
+   */
+  async confirmOrderDelivery(id: number, warehouseId?: string, note?: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { orderItems: { include: { product: true } } },
+    });
+    if (!order) throw new NotFoundException('Order tidak ditemukan');
+    if (order.status === 'delivered') throw new BadRequestException('Order sudah dikonfirmasi pengirimannya');
+    if (order.status === 'cancelled') throw new BadRequestException('Order sudah dibatalkan');
+
+    const movements: any[] = [];
+
+    if (warehouseId) {
+      for (const item of order.orderItems) {
+        if (!item.productId || item.qty <= 0) continue;
+        const movement = await this.inventoryService.updateStok(
+          item.productId,
+          item.qty,
+          'out',
+          note ?? `Penjualan Order #${order.id} | ${order.namaCustomer}`,
+          warehouseId,
+          String(order.id),
+        );
+        movements.push(movement);
+      }
+    }
+
+    const updatedOrder = await this.prisma.order.update({
+      where: { id },
+      data: { status: 'delivered', statusPengiriman: 'selesai' },
+    });
+
+    return { order: updatedOrder, movements, warehouseId };
+  }
+
   async uploadBuktiTransfer(id: number, base64Data: string) {
     return this.prisma.order.update({
       where: { id },
@@ -128,7 +179,7 @@ export class SalesService {
         headers: { Authorization: process.env.FONNTE_TOKEN },
         body: JSON.stringify({
           target: order.nomorTelepon,
-          message: `Halo ${order.namaCustomer}, pesanan Anda (${order.orderId ?? order.id}) sedang diproses.`,
+          message: `Halo ${order.namaCustomer}, pesanan Anda #${order.orderId ?? order.id} sedang diproses.`,
         }),
       });
       return await resp.json();
@@ -168,7 +219,10 @@ export class SalesService {
   }
 
   async getSalesList() {
-    const SALES = ['Ahmad Santoso', 'Budi Pratama', 'CV Maju Jaya', 'PT Sumber Makmur', 'Dewi Lestari', 'Eko Prasetyo'];
-    return SALES;
+    const salesUsers = await this.prisma.user.findMany({
+      where: { active: true, role: { name: { in: ['sales', 'Sales', 'sales manager', 'Sales Manager'] } } },
+      select: { id: true, name: true, email: true },
+    });
+    return salesUsers.length > 0 ? salesUsers : [];
   }
 }
