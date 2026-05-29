@@ -1,331 +1,305 @@
-import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
+import { PrismaClient, CostingMethod } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const password = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'admin123', 10);
+  console.log('🌱 Mulai seeding Gentong Mas ERP...\n');
 
-  // ─── ROLE & PERMISSIONS ───────────────────────────────────────────────
-  const adminRole = await prisma.role.upsert({
-    where: { name: 'admin' },
-    update: { description: 'Administrator role with full access' },
-    create: { name: 'admin', description: 'Administrator role with full access' },
-  });
+  // ─── ROLES ────────────────────────────────────────────────────────────────
+  console.log('📋 Seeding roles...');
+  const roles = await Promise.all([
+    prisma.role.upsert({ where: { name: 'Super Admin' }, update: {}, create: { name: 'Super Admin', description: 'Akses penuh ke semua fitur' } }),
+    prisma.role.upsert({ where: { name: 'Admin' }, update: {}, create: { name: 'Admin', description: 'Administrator operasional harian' } }),
+    prisma.role.upsert({ where: { name: 'Owner' }, update: {}, create: { name: 'Owner', description: 'Pemilik usaha — akses laporan & keuangan' } }),
+    prisma.role.upsert({ where: { name: 'Finance' }, update: {}, create: { name: 'Finance', description: 'Staf keuangan & akuntansi' } }),
+    prisma.role.upsert({ where: { name: 'Sales' }, update: {}, create: { name: 'Sales', description: 'Staf penjualan' } }),
+    prisma.role.upsert({ where: { name: 'Gudang' }, update: {}, create: { name: 'Gudang', description: 'Staf gudang & inventori' } }),
+    prisma.role.upsert({ where: { name: 'Kasir' }, update: {}, create: { name: 'Kasir', description: 'Kasir POS' } }),
+    prisma.role.upsert({ where: { name: 'Driver' }, update: {}, create: { name: 'Driver', description: 'Pengemudi pengiriman' } }),
+    prisma.role.upsert({ where: { name: 'Purchasing' }, update: {}, create: { name: 'Purchasing', description: 'Staf pembelian & pengadaan' } }),
+  ]);
+  const roleMap = Object.fromEntries(roles.map(r => [r.name, r]));
+  console.log(`   ✓ ${roles.length} roles`);
 
-  for (const p of [
-    { name: 'dashboard.view', description: 'View dashboard summary' },
-    { name: 'notifications.view', description: 'View notifications' },
-    { name: 'notifications.update', description: 'Mark notifications as read' },
-    { name: 'notifications.create', description: 'Send notifications' },
-    { name: 'roles.view', description: 'View roles' },
-    { name: 'permissions.view', description: 'View permissions' },
-  ]) {
-    const perm = await prisma.permission.upsert({ where: { name: p.name }, update: {}, create: p });
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: adminRole.id, permissionId: perm.id } },
+  // ─── USERS ────────────────────────────────────────────────────────────────
+  console.log('👤 Seeding users...');
+  const hash = (p: string) => bcrypt.hashSync(p, 10);
+  const users = await Promise.all([
+    prisma.user.upsert({
+      where: { email: 'superadmin@gentongmas.com' },
       update: {},
-      create: { roleId: adminRole.id, permissionId: perm.id },
-    });
-  }
+      create: { email: 'superadmin@gentongmas.com', name: 'Super Admin', password: hash('Admin1234!'), roleId: roleMap['Super Admin'].id },
+    }),
+    prisma.user.upsert({
+      where: { email: 'admin@gentongmas.com' },
+      update: {},
+      create: { email: 'admin@gentongmas.com', name: 'Budi Hartono', password: hash('Admin1234!'), roleId: roleMap['Admin'].id },
+    }),
+    prisma.user.upsert({
+      where: { email: 'owner@gentongmas.com' },
+      update: {},
+      create: { email: 'owner@gentongmas.com', name: 'H. Sugiarto Widjaja', password: hash('Owner1234!'), roleId: roleMap['Owner'].id },
+    }),
+    prisma.user.upsert({
+      where: { email: 'finance@gentongmas.com' },
+      update: {},
+      create: { email: 'finance@gentongmas.com', name: 'Sari Dewi', password: hash('Finance1234!'), roleId: roleMap['Finance'].id },
+    }),
+    prisma.user.upsert({
+      where: { email: 'sales1@gentongmas.com' },
+      update: {},
+      create: { email: 'sales1@gentongmas.com', name: 'Agus Santoso', password: hash('Sales1234!'), roleId: roleMap['Sales'].id },
+    }),
+    prisma.user.upsert({
+      where: { email: 'sales2@gentongmas.com' },
+      update: {},
+      create: { email: 'sales2@gentongmas.com', name: 'Rina Kusuma', password: hash('Sales1234!'), roleId: roleMap['Sales'].id },
+    }),
+    prisma.user.upsert({
+      where: { email: 'gudang@gentongmas.com' },
+      update: {},
+      create: { email: 'gudang@gentongmas.com', name: 'Doni Prasetyo', password: hash('Gudang1234!'), roleId: roleMap['Gudang'].id },
+    }),
+    prisma.user.upsert({
+      where: { email: 'purchasing@gentongmas.com' },
+      update: {},
+      create: { email: 'purchasing@gentongmas.com', name: 'Wati Lestari', password: hash('Purchase1234!'), roleId: roleMap['Purchasing'].id },
+    }),
+  ]);
+  console.log(`   ✓ ${users.length} users`);
 
-  // ─── ADMIN USER ───────────────────────────────────────────────────────
-  await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
-    update: { name: 'Administrator', password, roleId: adminRole.id, active: true },
-    create: { email: 'admin@example.com', name: 'Administrator', password, active: true, roleId: adminRole.id },
-  });
+  // ─── WAREHOUSES ───────────────────────────────────────────────────────────
+  console.log('🏭 Seeding warehouses...');
+  const warehouses = await Promise.all([
+    prisma.warehouse.upsert({
+      where: { code: 'GDG-UTAMA' },
+      update: {},
+      create: { code: 'GDG-UTAMA', name: 'Gudang Utama', address: 'Jl. Industri Raya No. 88, Kawasan Berikat Cakung, Jakarta Timur 13910' },
+    }),
+    prisma.warehouse.upsert({
+      where: { code: 'GDG-BEKASI' },
+      update: {},
+      create: { code: 'GDG-BEKASI', name: 'Gudang Bekasi', address: 'Jl. Sultan Agung Km. 27, Bekasi Timur, Jawa Barat 17116' },
+    }),
+    prisma.warehouse.upsert({
+      where: { code: 'GDG-TANGERANG' },
+      update: {},
+      create: { code: 'GDG-TANGERANG', name: 'Gudang Tangerang', address: 'Jl. Gatot Subroto Km. 5, Tangerang Selatan, Banten 15312' },
+    }),
+  ]);
+  const warehouseUtama = warehouses[0];
+  console.log(`   ✓ ${warehouses.length} gudang`);
 
-  // ─── WAREHOUSE (unique: code) ─────────────────────────────────────────
-  const gudang = await prisma.warehouse.upsert({
-    where: { code: 'GDG-001' },
-    update: {},
-    create: { code: 'GDG-001', name: 'Gudang Utama', address: 'Jl. Industri No. 1, Surabaya', active: true },
-  });
+  // ─── PRODUCT CATEGORIES ───────────────────────────────────────────────────
+  console.log('🗂️  Seeding kategori produk...');
+  const categories = await Promise.all([
+    prisma.productCategory.upsert({ where: { code: 'CAT-SEMEN' }, update: {}, create: { code: 'CAT-SEMEN', name: 'Semen & Beton' } }),
+    prisma.productCategory.upsert({ where: { code: 'CAT-BESI' }, update: {}, create: { code: 'CAT-BESI', name: 'Besi & Baja' } }),
+    prisma.productCategory.upsert({ where: { code: 'CAT-KAYU' }, update: {}, create: { code: 'CAT-KAYU', name: 'Kayu & Triplek' } }),
+    prisma.productCategory.upsert({ where: { code: 'CAT-CAT' }, update: {}, create: { code: 'CAT-CAT', name: 'Cat & Bahan Kimia' } }),
+    prisma.productCategory.upsert({ where: { code: 'CAT-KERAMIK' }, update: {}, create: { code: 'CAT-KERAMIK', name: 'Keramik & Granit' } }),
+    prisma.productCategory.upsert({ where: { code: 'CAT-PIPA' }, update: {}, create: { code: 'CAT-PIPA', name: 'Pipa & Sanitasi' } }),
+    prisma.productCategory.upsert({ where: { code: 'CAT-ATAP' }, update: {}, create: { code: 'CAT-ATAP', name: 'Atap & Rangka' } }),
+    prisma.productCategory.upsert({ where: { code: 'CAT-ALAT' }, update: {}, create: { code: 'CAT-ALAT', name: 'Alat & Perkakas' } }),
+  ]);
+  const catMap = Object.fromEntries(categories.map(c => [c.code, c]));
+  console.log(`   ✓ ${categories.length} kategori`);
 
-  // ─── PRODUCT CATEGORIES (unique: code) ───────────────────────────────
-  const catSpr = await prisma.productCategory.upsert({ where: { code: 'CAT-SPR' }, update: {}, create: { code: 'CAT-SPR', name: 'Sparepart Motor' } });
-  const catOli = await prisma.productCategory.upsert({ where: { code: 'CAT-OLI' }, update: {}, create: { code: 'CAT-OLI', name: 'Pelumas & Oli' } });
+  // ─── PRODUCT UNITS ────────────────────────────────────────────────────────
+  console.log('📏 Seeding satuan produk...');
+  const units = await Promise.all([
+    prisma.productUnit.upsert({ where: { name: 'Sak' }, update: {}, create: { name: 'Sak', symbol: 'sak' } }),
+    prisma.productUnit.upsert({ where: { name: 'Kilogram' }, update: {}, create: { name: 'Kilogram', symbol: 'kg' } }),
+    prisma.productUnit.upsert({ where: { name: 'Ton' }, update: {}, create: { name: 'Ton', symbol: 'ton' } }),
+    prisma.productUnit.upsert({ where: { name: 'Batang' }, update: {}, create: { name: 'Batang', symbol: 'btg' } }),
+    prisma.productUnit.upsert({ where: { name: 'Lembar' }, update: {}, create: { name: 'Lembar', symbol: 'lbr' } }),
+    prisma.productUnit.upsert({ where: { name: 'Galon' }, update: {}, create: { name: 'Galon', symbol: 'gln' } }),
+    prisma.productUnit.upsert({ where: { name: 'Kaleng' }, update: {}, create: { name: 'Kaleng', symbol: 'klg' } }),
+    prisma.productUnit.upsert({ where: { name: 'Dus' }, update: {}, create: { name: 'Dus', symbol: 'dus' } }),
+    prisma.productUnit.upsert({ where: { name: 'Pcs' }, update: {}, create: { name: 'Pcs', symbol: 'pcs' } }),
+    prisma.productUnit.upsert({ where: { name: 'Meter Persegi' }, update: {}, create: { name: 'Meter Persegi', symbol: 'm2' } }),
+    prisma.productUnit.upsert({ where: { name: 'Meter' }, update: {}, create: { name: 'Meter', symbol: 'm' } }),
+    prisma.productUnit.upsert({ where: { name: 'Roll' }, update: {}, create: { name: 'Roll', symbol: 'roll' } }),
+  ]);
+  const unitMap = Object.fromEntries(units.map(u => [u.name, u]));
+  console.log(`   ✓ ${units.length} satuan`);
 
-  // ─── PRODUCT UNITS (unique: name) ─────────────────────────────────────
-  const uPcs = await prisma.productUnit.upsert({ where: { name: 'Pcs' }, update: {}, create: { name: 'Pcs', symbol: 'pcs' } });
-  const uLtr = await prisma.productUnit.upsert({ where: { name: 'Liter' }, update: {}, create: { name: 'Liter', symbol: 'L' } });
+  // ─── PRODUCTS ─────────────────────────────────────────────────────────────
+  console.log('📦 Seeding produk...');
 
-  // ─── PRODUCTS (unique: sku) ────────────────────────────────────────────
-  for (const p of [
-    { sku: 'HDA-001', name: 'Rantai Motor Honda Aspira', hargaBeli: 45000, hargaJual: 55000, stok: 150, stokMinimum: 20, categoryId: catSpr.id, unitId: uPcs.id, brand: 'ASPIRA' },
-    { sku: 'FED-001', name: 'Kampas Rem Depan Federal', hargaBeli: 35000, hargaJual: 42000, stok: 200, stokMinimum: 30, categoryId: catSpr.id, unitId: uPcs.id, brand: 'FEDERAL' },
-    { sku: 'YMH-001', name: 'Filter Udara Yamaha', hargaBeli: 25000, hargaJual: 32000, stok: 80, stokMinimum: 15, categoryId: catSpr.id, unitId: uPcs.id, brand: 'YAMAHA' },
-    { sku: 'NGK-001', name: 'Busi NGK Racing', hargaBeli: 18000, hargaJual: 25000, stok: 300, stokMinimum: 50, categoryId: catSpr.id, unitId: uPcs.id, brand: 'HONDA' },
-    { sku: 'CAS-001', name: 'Oli Mesin Castrol 10W-40 1L', hargaBeli: 55000, hargaJual: 65000, stok: 120, stokMinimum: 20, categoryId: catOli.id, unitId: uLtr.id, brand: 'SUZUKI' },
-    { sku: 'AHM-001', name: 'Oli Gardan AHM SPX', hargaBeli: 22000, hargaJual: 28000, stok: 90, stokMinimum: 15, categoryId: catOli.id, unitId: uLtr.id, brand: 'HONDA' },
-    { sku: 'KWS-001', name: 'Kampas Kopling Kawasaki', hargaBeli: 48000, hargaJual: 58000, stok: 45, stokMinimum: 10, categoryId: catSpr.id, unitId: uPcs.id, brand: 'KAWASAKI' },
-    { sku: 'HDB-001', name: 'Gear Set Honda Beat', hargaBeli: 85000, hargaJual: 99000, stok: 60, stokMinimum: 10, categoryId: catSpr.id, unitId: uPcs.id, brand: 'HONDA' },
-    { sku: 'VBY-001', name: 'V-Belt Yamaha Mio', hargaBeli: 55000, hargaJual: 68000, stok: 40, stokMinimum: 10, categoryId: catSpr.id, unitId: uPcs.id, brand: 'YAMAHA' },
-    { sku: 'AKY-001', name: 'Aki Yuasa 12V 5Ah', hargaBeli: 185000, hargaJual: 220000, stok: 25, stokMinimum: 5, categoryId: catSpr.id, unitId: uPcs.id, brand: 'HONDA' },
-  ]) {
-    await prisma.product.upsert({
+  type ProductSeed = {
+    sku: string; name: string; brand?: string;
+    categoryCode: string; unitName: string;
+    hargaBeli: number; hargaJual: number;
+    stokMinimum: number; costingMethod?: CostingMethod;
+    stokAwal: number;
+  };
+
+  const productSeeds: ProductSeed[] = [
+    // SEMEN & BETON
+    { sku: 'SEM-TR-50', name: 'Semen Tiga Roda 50 kg', brand: 'Tiga Roda', categoryCode: 'CAT-SEMEN', unitName: 'Sak', hargaBeli: 58000, hargaJual: 65000, stokMinimum: 50, stokAwal: 500 },
+    { sku: 'SEM-GRS-50', name: 'Semen Gresik 50 kg', brand: 'Gresik', categoryCode: 'CAT-SEMEN', unitName: 'Sak', hargaBeli: 57000, hargaJual: 64000, stokMinimum: 50, stokAwal: 400 },
+    { sku: 'SEM-PAD-40', name: 'Semen Padang 40 kg', brand: 'Padang', categoryCode: 'CAT-SEMEN', unitName: 'Sak', hargaBeli: 47000, hargaJual: 53000, stokMinimum: 30, stokAwal: 300 },
+    { sku: 'SEM-BHL-50', name: 'Semen Batu Hitam 50 kg', brand: 'Batu Hitam', categoryCode: 'CAT-SEMEN', unitName: 'Sak', hargaBeli: 56000, hargaJual: 63000, stokMinimum: 30, stokAwal: 250 },
+    { sku: 'BET-MOR-25', name: 'Mortar Instan MU-100 25 kg', brand: 'MU', categoryCode: 'CAT-SEMEN', unitName: 'Sak', hargaBeli: 48000, hargaJual: 56000, stokMinimum: 20, stokAwal: 150 },
+
+    // BESI & BAJA
+    { sku: 'BSI-10-12', name: 'Besi Beton Polos 10mm × 12m', brand: 'Master Steel', categoryCode: 'CAT-BESI', unitName: 'Batang', hargaBeli: 75000, hargaJual: 85000, stokMinimum: 100, costingMethod: CostingMethod.FIFO, stokAwal: 800 },
+    { sku: 'BSI-12-12', name: 'Besi Beton Polos 12mm × 12m', brand: 'Master Steel', categoryCode: 'CAT-BESI', unitName: 'Batang', hargaBeli: 95000, hargaJual: 108000, stokMinimum: 100, costingMethod: CostingMethod.FIFO, stokAwal: 600 },
+    { sku: 'BSI-DLG-10-12', name: 'Besi Beton Ulir D10 × 12m', brand: 'Krakatau Steel', categoryCode: 'CAT-BESI', unitName: 'Batang', hargaBeli: 80000, hargaJual: 92000, stokMinimum: 80, costingMethod: CostingMethod.FIFO, stokAwal: 500 },
+    { sku: 'BSI-DLG-13-12', name: 'Besi Beton Ulir D13 × 12m', brand: 'Krakatau Steel', categoryCode: 'CAT-BESI', unitName: 'Batang', hargaBeli: 125000, hargaJual: 142000, stokMinimum: 80, costingMethod: CostingMethod.FIFO, stokAwal: 400 },
+    { sku: 'BSI-HLW-50-50', name: 'Hollow Besi 50×50×6m', brand: 'Baja Ringan', categoryCode: 'CAT-BESI', unitName: 'Batang', hargaBeli: 155000, hargaJual: 175000, stokMinimum: 50, stokAwal: 200 },
+    { sku: 'WF-200-6M', name: 'WF Baja 200×100×6m', brand: 'Gunung Garuda', categoryCode: 'CAT-BESI', unitName: 'Batang', hargaBeli: 1250000, hargaJual: 1400000, stokMinimum: 10, costingMethod: CostingMethod.FIFO, stokAwal: 50 },
+
+    // KAYU & TRIPLEK
+    { sku: 'TRP-9MM-122', name: 'Triplek 9mm 1220×2440mm', brand: 'Sengon', categoryCode: 'CAT-KAYU', unitName: 'Lembar', hargaBeli: 82000, hargaJual: 95000, stokMinimum: 30, stokAwal: 200 },
+    { sku: 'TRP-12MM-122', name: 'Triplek 12mm 1220×2440mm', brand: 'Sengon', categoryCode: 'CAT-KAYU', unitName: 'Lembar', hargaBeli: 108000, hargaJual: 125000, stokMinimum: 30, stokAwal: 180 },
+    { sku: 'TRP-18MM-122', name: 'Triplek 18mm 1220×2440mm', brand: 'Meranti', categoryCode: 'CAT-KAYU', unitName: 'Lembar', hargaBeli: 155000, hargaJual: 178000, stokMinimum: 20, stokAwal: 120 },
+    { sku: 'GYP-9MM-120', name: 'Gypsum Board 9mm 1200×2400mm', brand: 'Jayaboard', categoryCode: 'CAT-KAYU', unitName: 'Lembar', hargaBeli: 62000, hargaJual: 72000, stokMinimum: 25, stokAwal: 250 },
+
+    // CAT & KIMIA
+    { sku: 'CAT-EXT-5KG-PTH', name: 'Cat Eksterior 5kg Putih', brand: 'Dulux', categoryCode: 'CAT-CAT', unitName: 'Kaleng', hargaBeli: 155000, hargaJual: 178000, stokMinimum: 20, stokAwal: 100 },
+    { sku: 'CAT-EXT-25KG-PTH', name: 'Cat Eksterior 25kg Putih', brand: 'Dulux', categoryCode: 'CAT-CAT', unitName: 'Kaleng', hargaBeli: 625000, hargaJual: 720000, stokMinimum: 10, stokAwal: 60 },
+    { sku: 'CAT-INT-5KG-PTH', name: 'Cat Interior 5kg Putih', brand: 'Catylac', categoryCode: 'CAT-CAT', unitName: 'Kaleng', hargaBeli: 82000, hargaJual: 95000, stokMinimum: 20, stokAwal: 120 },
+    { sku: 'CAT-DAK-5KG-GRY', name: 'Cat Waterproof Dak 5kg Abu', brand: 'No Drop', categoryCode: 'CAT-CAT', unitName: 'Kaleng', hargaBeli: 175000, hargaJual: 200000, stokMinimum: 15, stokAwal: 80 },
+    { sku: 'LEM-PC-5KG', name: 'Perekat Keramik MU-400 5kg', brand: 'MU', categoryCode: 'CAT-CAT', unitName: 'Sak', hargaBeli: 42000, hargaJual: 50000, stokMinimum: 30, stokAwal: 200 },
+
+    // KERAMIK & GRANIT
+    { sku: 'KRM-40-40-PTH', name: 'Keramik 40×40cm Putih Glossy', brand: 'Roman', categoryCode: 'CAT-KERAMIK', unitName: 'Dus', hargaBeli: 62000, hargaJual: 72000, stokMinimum: 30, stokAwal: 300 },
+    { sku: 'KRM-60-60-GRY', name: 'Keramik 60×60cm Abu Polished', brand: 'Niro Granite', categoryCode: 'CAT-KERAMIK', unitName: 'Dus', hargaBeli: 185000, hargaJual: 215000, stokMinimum: 20, stokAwal: 150 },
+    { sku: 'GRN-60-60-BLK', name: 'Granit 60×60cm Hitam Polished', brand: 'Granito', categoryCode: 'CAT-KERAMIK', unitName: 'Meter Persegi', hargaBeli: 195000, hargaJual: 225000, stokMinimum: 20, stokAwal: 200 },
+
+    // PIPA & SANITASI
+    { sku: 'PPA-AW-4-4M', name: 'Pipa PVC AW 4" 4m', brand: 'Rucika', categoryCode: 'CAT-PIPA', unitName: 'Batang', hargaBeli: 95000, hargaJual: 110000, stokMinimum: 20, stokAwal: 100 },
+    { sku: 'PPA-AW-3-4M', name: 'Pipa PVC AW 3" 4m', brand: 'Rucika', categoryCode: 'CAT-PIPA', unitName: 'Batang', hargaBeli: 55000, hargaJual: 65000, stokMinimum: 20, stokAwal: 150 },
+    { sku: 'PPA-GLP-1-6M', name: 'Pipa Galvanis 1" 6m', brand: 'Spindo', categoryCode: 'CAT-PIPA', unitName: 'Batang', hargaBeli: 135000, hargaJual: 155000, stokMinimum: 15, stokAwal: 80 },
+
+    // ATAP & RANGKA
+    { sku: 'ATR-GLV-03-183', name: 'Atap Seng Gelombang 0.3mm × 1.83m', brand: 'Aluzinc', categoryCode: 'CAT-ATAP', unitName: 'Lembar', hargaBeli: 48000, hargaJual: 57000, stokMinimum: 50, stokAwal: 500 },
+    { sku: 'ATR-UPVC-05-185', name: 'Atap UPVC Bening 0.5mm × 1.85m', brand: 'Sunlite', categoryCode: 'CAT-ATAP', unitName: 'Lembar', hargaBeli: 62000, hargaJual: 73000, stokMinimum: 30, stokAwal: 200 },
+
+    // ALAT & PERKAKAS
+    { sku: 'ALT-SKTRU-M8', name: 'Skrup Baja Ringan M8×16mm (200 pcs)', brand: 'Pioner', categoryCode: 'CAT-ALAT', unitName: 'Dus', hargaBeli: 28000, hargaJual: 35000, stokMinimum: 50, stokAwal: 300 },
+    { sku: 'ALT-WRM-10MM', name: 'Kawat Bendrat 1mm (1 kg)', brand: 'Kawat Lokal', categoryCode: 'CAT-ALAT', unitName: 'Kilogram', hargaBeli: 18000, hargaJual: 22000, stokMinimum: 100, stokAwal: 500 },
+    { sku: 'ALT-PAKU-57', name: 'Paku Biasa 5/7 (1 kg)', brand: 'Lokal', categoryCode: 'CAT-ALAT', unitName: 'Kilogram', hargaBeli: 14000, hargaJual: 18000, stokMinimum: 50, stokAwal: 400 },
+  ];
+
+  let prodCount = 0;
+  for (const p of productSeeds) {
+    const product = await prisma.product.upsert({
       where: { sku: p.sku },
-      update: { stok: p.stok },
-      create: { ...p, warehouseId: gudang.id, active: true },
+      update: {},
+      create: {
+        sku: p.sku,
+        name: p.name,
+        brand: p.brand,
+        categoryId: catMap[p.categoryCode].id,
+        unitId: unitMap[p.unitName].id,
+        hargaBeli: p.hargaBeli,
+        hargaJual: p.hargaJual,
+        stokMinimum: p.stokMinimum,
+        costingMethod: p.costingMethod ?? CostingMethod.AVERAGE,
+        currentAvgCost: p.hargaBeli,
+      },
     });
-  }
 
-  // ─── CUSTOMERS (no unique except id — use findFirst guard) ─────────────
-  for (const c of [
-    { name: 'Bengkel Maju Jaya', email: 'maju@gmail.com', phone: '08111222333', city: 'Surabaya', address: 'Jl. Raya Darmo 10', active: true },
-    { name: 'UD Sumber Rejeki', email: 'sumber@gmail.com', phone: '08222333444', city: 'Sidoarjo', address: 'Jl. Veteran 5', active: true },
-    { name: 'Toko Bintang Motor', email: 'bintang@gmail.com', phone: '08333444555', city: 'Gresik', address: 'Jl. Harun Tohir 20', active: true },
-    { name: 'CV Karya Mandiri', email: 'karya@gmail.com', phone: '08444555666', city: 'Surabaya', address: 'Jl. Ahmad Yani 99', active: true },
-    { name: 'Bengkel Santoso', email: 'santoso@gmail.com', phone: '08555666777', city: 'Malang', address: 'Jl. Semeru 15', active: true },
-    { name: 'PT Cakra Motor', email: 'cakra@gmail.com', phone: '08666777888', city: 'Surabaya', address: 'Jl. Dupak 55', active: true },
-  ]) {
-    const exists = await prisma.customer.findFirst({ where: { name: c.name } });
-    if (!exists) await prisma.customer.create({ data: c });
-  }
+    // Stok awal di Gudang Utama
+    await prisma.stock.upsert({
+      where: { productId_warehouseId: { productId: product.id, warehouseId: warehouseUtama.id } },
+      update: {},
+      create: { productId: product.id, warehouseId: warehouseUtama.id, qty: p.stokAwal },
+    });
 
-  // ─── SUPPLIERS (unique: code) ─────────────────────────────────────────
-  for (const s of [
-    { code: 'SUP-001', name: 'PT Aspira Indonesia', email: 'aspira@supplier.com', phone: '02111111111', city: 'Jakarta', address: 'Jl. MT Haryono Kav. 1', active: true },
-    { code: 'SUP-002', name: 'PT Federal Parts', email: 'federal@supplier.com', phone: '02222222222', city: 'Jakarta', address: 'Jl. Casablanca 88', active: true },
-    { code: 'SUP-003', name: 'CV Yamaha Distributor', email: 'yamaha@supplier.com', phone: '02333333333', city: 'Surabaya', address: 'Jl. Rungkut Industri 5', active: true },
-    { code: 'SUP-004', name: 'PT Global Spare Nusantara', email: 'gsn@supplier.com', phone: '02444444444', city: 'Surabaya', address: 'Jl. Margomulyo Ind. 3', active: true },
-  ]) {
-    await prisma.supplier.upsert({ where: { code: s.code }, update: {}, create: s });
-  }
-
-  // ─── EMPLOYEES (unique: nik) ───────────────────────────────────────────
-  for (const e of [
-    { nik: 'EMP001', name: 'Budi Santoso', jabatan: 'Sales Manager', departemen: 'Sales', gapok: 8000000, status: 'aktif', tanggalMasuk: new Date('2020-01-15') },
-    { nik: 'EMP002', name: 'Dewi Lestari', jabatan: 'Admin', departemen: 'Admin', gapok: 5500000, status: 'aktif', tanggalMasuk: new Date('2021-03-01') },
-    { nik: 'EMP003', name: 'Eko Prasetyo', jabatan: 'Driver', departemen: 'Operasional', gapok: 4500000, status: 'aktif', tanggalMasuk: new Date('2019-07-20') },
-    { nik: 'EMP004', name: 'Fitri Handayani', jabatan: 'Kasir', departemen: 'Finance', gapok: 5000000, status: 'aktif', tanggalMasuk: new Date('2022-01-10') },
-    { nik: 'EMP005', name: 'Gunawan Susilo', jabatan: 'Staf Gudang', departemen: 'Logistik', gapok: 4800000, status: 'aktif', tanggalMasuk: new Date('2020-06-01') },
-    { nik: 'EMP006', name: 'Hendra Wijaya', jabatan: 'Sales', departemen: 'Sales', gapok: 6000000, status: 'aktif', tanggalMasuk: new Date('2021-08-15') },
-  ]) {
-    await prisma.employee.upsert({ where: { nik: e.nik }, update: {}, create: e });
-  }
-
-  // ─── COA (unique: code) ────────────────────────────────────────────────
-  for (const coa of [
-    { code: '1-1001', name: 'Kas', type: 'aset' },
-    { code: '1-1002', name: 'Bank BCA', type: 'aset' },
-    { code: '1-1003', name: 'Piutang Dagang', type: 'aset' },
-    { code: '1-2001', name: 'Persediaan Barang', type: 'aset' },
-    { code: '2-1001', name: 'Hutang Dagang', type: 'kewajiban' },
-    { code: '3-1001', name: 'Modal Disetor', type: 'ekuitas' },
-    { code: '4-1001', name: 'Pendapatan Penjualan', type: 'pendapatan' },
-    { code: '5-1001', name: 'Beban Pokok Penjualan', type: 'beban' },
-    { code: '5-1002', name: 'Beban Gaji', type: 'beban' },
-    { code: '5-1003', name: 'Beban Operasional', type: 'beban' },
-  ]) {
-    await prisma.chartOfAccount.upsert({ where: { code: coa.code }, update: {}, create: { ...coa, active: true } });
-  }
-
-  // ─── BANK ACCOUNTS (no unique — use findFirst guard) ──────────────────
-  for (const ba of [
-    { bankName: 'BCA', accountName: 'Gentong Mas', accountNo: 'BCA-1234567890', balance: 120000000, active: true },
-    { bankName: 'Mandiri', accountName: 'Gentong Mas', accountNo: 'MDR-0987654321', balance: 45000000, active: true },
-  ]) {
-    const exists = await prisma.bankAccount.findFirst({ where: { accountNo: ba.accountNo } });
-    if (!exists) await prisma.bankAccount.create({ data: ba });
-  }
-
-  // ─── DRIVER AREAS (fields: name, areas JSON) ──────────────────────────
-  for (const da of [
-    { name: 'Eko Prasetyo', areas: [{ wilayah: 'Surabaya Pusat', jadwal: 'Senin-Jumat' }] },
-    { name: 'Ahmad Fauzi', areas: [{ wilayah: 'Surabaya Selatan', jadwal: 'Senin-Sabtu' }] },
-    { name: 'Bambang Wibowo', areas: [{ wilayah: 'Sidoarjo', jadwal: 'Selasa-Sabtu' }] },
-    { name: 'Slamet Riyadi', areas: [{ wilayah: 'Gresik', jadwal: 'Senin-Jumat' }] },
-    { name: 'Ridwan Efendi', areas: [{ wilayah: 'Surabaya Utara', jadwal: 'Senin-Sabtu' }] },
-  ]) {
-    const exists = await prisma.driverArea.findFirst({ where: { name: da.name } });
-    if (!exists) await prisma.driverArea.create({ data: da });
-  }
-
-  // ─── APP SETTINGS ─────────────────────────────────────────────────────
-  for (const s of [
-    { key: 'company_name', value: 'Gentong Mas' },
-    { key: 'company_address', value: 'Jl. Industri No. 1, Surabaya 60123' },
-    { key: 'company_phone', value: '031-1234567' },
-    { key: 'company_email', value: 'info@gentongmas.com' },
-    { key: 'company_npwp', value: '01.234.567.8-901.000' },
-    { key: 'currency', value: 'IDR' },
-    { key: 'timezone', value: 'Asia/Jakarta' },
-  ]) {
-    await prisma.appSetting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
-  }
-
-  // ─── POS CATEGORIES ───────────────────────────────────────────────────
-  for (const cat of [
-    { name: 'Sparepart', active: true },
-    { name: 'Oli & Pelumas', active: true },
-    { name: 'Aksesoris', active: true },
-  ]) {
-    const exists = await prisma.posCategory.findFirst({ where: { name: cat.name } });
-    if (!exists) await prisma.posCategory.create({ data: cat });
-  }
-
-  // ─── POS USER (unique: username) ──────────────────────────────────────
-  await prisma.posUser.upsert({
-    where: { username: 'kasir1' },
-    update: {},
-    create: { username: 'kasir1', password: await bcrypt.hash('kasir123', 10), name: 'Fitri Handayani', role: 'kasir', active: true },
-  });
-
-  // ─── DEMO ORDER ───────────────────────────────────────────────────────
-  const prod1 = await prisma.product.findFirst({ where: { sku: 'HDA-001' } });
-  const cust1 = await prisma.customer.findFirst({ where: { name: 'Bengkel Maju Jaya' } });
-  if (prod1 && cust1) {
-    const existingOrder = await prisma.order.findFirst({ where: { customerId: cust1.id } });
-    if (!existingOrder) {
-      await prisma.order.create({
+    // StockMovement opening (hanya jika belum ada)
+    const existingMov = await prisma.stockMovement.findFirst({
+      where: { productId: product.id, type: 'opening', warehouseId: warehouseUtama.id },
+    });
+    if (!existingMov) {
+      await prisma.stockMovement.create({
         data: {
-          namaCustomer: cust1.name,
-          salesName: 'Budi Santoso',
-          status: 'confirmed',
-          totalHarga: Number(prod1.hargaJual) * 5,
-          alamat: cust1.address ?? '',
-          items: [{ productId: prod1.id, qty: 5, harga: Number(prod1.hargaJual) }],
-          customerId: cust1.id,
-          orderItems: {
-            create: [{ productId: prod1.id, nama: prod1.name, qty: 5, harga: prod1.hargaJual, subtotal: Number(prod1.hargaJual) * 5 }],
-          },
+          productId: product.id,
+          warehouseId: warehouseUtama.id,
+          type: 'opening',
+          qty: p.stokAwal,
+          note: 'Stok awal seeding',
         },
       });
     }
+    prodCount++;
   }
+  console.log(`   ✓ ${prodCount} produk + stok awal di Gudang Utama`);
 
-  // ─── NOTIFICATIONS (recipient = admin user id) ────────────────────────
-  const adminUser = await prisma.user.findFirst({ where: { email: 'admin@example.com' } });
-  if (adminUser) {
-    for (const n of [
-      { recipient: adminUser.id, title: 'Stok Menipis', message: 'Stok Kampas Kopling Kawasaki tersisa 45 pcs', status: 'unread' },
-      { recipient: adminUser.id, title: 'Order Baru', message: 'Order baru dari Bengkel Maju Jaya senilai Rp 275.000', status: 'unread' },
-      { recipient: adminUser.id, title: 'Sync Kledo Berhasil', message: 'Sinkronisasi produk Kledo selesai: 24 produk diperbarui', status: 'read' },
-    ]) {
-      const exists = await prisma.notification.findFirst({ where: { title: n.title, recipient: adminUser.id } });
-      if (!exists) await prisma.notification.create({ data: n });
-    }
-  }
+  // ─── SUPPLIERS ────────────────────────────────────────────────────────────
+  console.log('🏢 Seeding suppliers...');
 
-  console.log('✅ Seed selesai: admin, produk, pelanggan, supplier, karyawan, 65+ Account COA Indonesia, FiscalYear/Period, driver areas, settings, POS, notifikasi');
-}
-
-
-  // ─── DEFAULT COA INDONESIA (Account model — double entry) ─────────────
-  const coaIndonesia: {code:string;name:string;type:string;parentCode?:string}[] = [
-    // 1xxx ASET
-    { code: '1000', name: 'ASET',                           type: 'ASSET' },
-    { code: '1100', name: 'Aset Lancar',                    type: 'ASSET', parentCode: '1000' },
-    { code: '1101', name: 'Kas',                            type: 'ASSET', parentCode: '1100' },
-    { code: '1102', name: 'Bank BCA',                       type: 'ASSET', parentCode: '1100' },
-    { code: '1103', name: 'Bank Mandiri',                   type: 'ASSET', parentCode: '1100' },
-    { code: '1110', name: 'Piutang Dagang',                 type: 'ASSET', parentCode: '1100' },
-    { code: '1111', name: 'Cad. Kerugian Piutang',          type: 'ASSET', parentCode: '1100' },
-    { code: '1120', name: 'Uang Muka Pembelian',            type: 'ASSET', parentCode: '1100' },
-    { code: '1130', name: 'PPN Masukan',                    type: 'ASSET', parentCode: '1100' },
-    { code: '1140', name: 'Biaya Dibayar Dimuka',           type: 'ASSET', parentCode: '1100' },
-    { code: '1150', name: 'Persediaan Barang Dagang',       type: 'ASSET', parentCode: '1100' },
-    { code: '1200', name: 'Aset Tidak Lancar',              type: 'ASSET', parentCode: '1000' },
-    { code: '1210', name: 'Tanah',                          type: 'ASSET', parentCode: '1200' },
-    { code: '1220', name: 'Bangunan',                       type: 'ASSET', parentCode: '1200' },
-    { code: '1221', name: 'Akum. Penyusutan Bangunan',      type: 'ASSET', parentCode: '1200' },
-    { code: '1230', name: 'Peralatan & Mesin',              type: 'ASSET', parentCode: '1200' },
-    { code: '1231', name: 'Akum. Penyusutan Peralatan',     type: 'ASSET', parentCode: '1200' },
-    { code: '1240', name: 'Kendaraan',                      type: 'ASSET', parentCode: '1200' },
-    { code: '1241', name: 'Akum. Penyusutan Kendaraan',     type: 'ASSET', parentCode: '1200' },
-    // 2xxx LIABILITAS
-    { code: '2000', name: 'LIABILITAS',                     type: 'LIABILITY' },
-    { code: '2100', name: 'Liabilitas Jangka Pendek',       type: 'LIABILITY', parentCode: '2000' },
-    { code: '2101', name: 'Hutang Dagang',                  type: 'LIABILITY', parentCode: '2100' },
-    { code: '2102', name: 'Hutang Gaji',                    type: 'LIABILITY', parentCode: '2100' },
-    { code: '2103', name: 'Uang Muka Penjualan',            type: 'LIABILITY', parentCode: '2100' },
-    { code: '2104', name: 'PPN Keluaran',                   type: 'LIABILITY', parentCode: '2100' },
-    { code: '2105', name: 'Hutang PPh 21',                  type: 'LIABILITY', parentCode: '2100' },
-    { code: '2106', name: 'Hutang PPh 23',                  type: 'LIABILITY', parentCode: '2100' },
-    { code: '2107', name: 'Biaya Masih Harus Dibayar',      type: 'LIABILITY', parentCode: '2100' },
-    { code: '2200', name: 'Liabilitas Jangka Panjang',      type: 'LIABILITY', parentCode: '2000' },
-    { code: '2201', name: 'Hutang Bank BCA',                type: 'LIABILITY', parentCode: '2200' },
-    { code: '2202', name: 'Hutang Bank Mandiri',            type: 'LIABILITY', parentCode: '2200' },
-    // 3xxx EKUITAS
-    { code: '3000', name: 'EKUITAS',                        type: 'EQUITY' },
-    { code: '3101', name: 'Modal Disetor',                  type: 'EQUITY',    parentCode: '3000' },
-    { code: '3102', name: 'Laba Ditahan',                   type: 'EQUITY',    parentCode: '3000' },
-    { code: '3103', name: 'Laba Tahun Berjalan',            type: 'EQUITY',    parentCode: '3000' },
-    // 4xxx PENDAPATAN
-    { code: '4000', name: 'PENDAPATAN',                     type: 'REVENUE' },
-    { code: '4101', name: 'Penjualan',                      type: 'REVENUE',   parentCode: '4000' },
-    { code: '4102', name: 'Retur Penjualan',                type: 'REVENUE',   parentCode: '4000' },
-    { code: '4103', name: 'Diskon Penjualan',               type: 'REVENUE',   parentCode: '4000' },
-    { code: '4201', name: 'Pendapatan Lain-lain',           type: 'REVENUE',   parentCode: '4000' },
-    { code: '4202', name: 'Pendapatan Bunga',               type: 'REVENUE',   parentCode: '4000' },
-    // 5xxx HPP
-    { code: '5000', name: 'HARGA POKOK PENJUALAN',          type: 'EXPENSE' },
-    { code: '5101', name: 'HPP Barang Dagang',              type: 'EXPENSE',   parentCode: '5000' },
-    { code: '5102', name: 'Retur Pembelian',                type: 'EXPENSE',   parentCode: '5000' },
-    { code: '5103', name: 'Diskon Pembelian',               type: 'EXPENSE',   parentCode: '5000' },
-    // 6xxx BEBAN OPERASIONAL
-    { code: '6000', name: 'BEBAN OPERASIONAL',              type: 'EXPENSE' },
-    { code: '6100', name: 'Beban Penjualan',                type: 'EXPENSE',   parentCode: '6000' },
-    { code: '6101', name: 'Beban Gaji Sales',               type: 'EXPENSE',   parentCode: '6100' },
-    { code: '6102', name: 'Beban Komisi',                   type: 'EXPENSE',   parentCode: '6100' },
-    { code: '6103', name: 'Beban Transportasi',             type: 'EXPENSE',   parentCode: '6100' },
-    { code: '6104', name: 'Beban Marketing & Promosi',      type: 'EXPENSE',   parentCode: '6100' },
-    { code: '6200', name: 'Beban Umum & Administrasi',      type: 'EXPENSE',   parentCode: '6000' },
-    { code: '6201', name: 'Beban Gaji Karyawan',            type: 'EXPENSE',   parentCode: '6200' },
-    { code: '6202', name: 'Beban Listrik & Air',            type: 'EXPENSE',   parentCode: '6200' },
-    { code: '6203', name: 'Beban Sewa',                     type: 'EXPENSE',   parentCode: '6200' },
-    { code: '6204', name: 'Beban Telepon & Internet',       type: 'EXPENSE',   parentCode: '6200' },
-    { code: '6205', name: 'Beban Perlengkapan Kantor',      type: 'EXPENSE',   parentCode: '6200' },
-    { code: '6206', name: 'Beban Penyusutan',               type: 'EXPENSE',   parentCode: '6200' },
-    { code: '6207', name: 'Beban Asuransi',                 type: 'EXPENSE',   parentCode: '6200' },
-    { code: '6208', name: 'Beban Pemeliharaan',             type: 'EXPENSE',   parentCode: '6200' },
-    // 7xxx BEBAN LAIN-LAIN
-    { code: '7000', name: 'BEBAN LAIN-LAIN',                type: 'EXPENSE' },
-    { code: '7101', name: 'Beban Bunga Bank',               type: 'EXPENSE',   parentCode: '7000' },
-    { code: '7102', name: 'Beban Administrasi Bank',        type: 'EXPENSE',   parentCode: '7000' },
-    { code: '7103', name: 'Beban Pajak',                    type: 'EXPENSE',   parentCode: '7000' },
-    { code: '7104', name: 'Kerugian Selisih Kurs',          type: 'EXPENSE',   parentCode: '7000' },
+  const supplierSeeds = [
+    { code: 'SUP-001', name: 'PT Semen Indonesia (Persero) Tbk', email: 'purchasing@semenindonesia.com', phone: '031-3981732', address: 'Jl. Veteran, Gresik, Jawa Timur 61122', city: 'Gresik', npwp: '01.001.000.0-091.000', bankName: 'BCA', bankAccount: '2050123456' },
+    { code: 'SUP-002', name: 'PT Krakatau Steel (Persero) Tbk', email: 'sales@krakatausteel.com', phone: '0254-570126', address: 'Jl. Industri No. 5, Cilegon, Banten 42435', city: 'Cilegon', npwp: '01.002.000.0-412.000', bankName: 'Mandiri', bankAccount: '1230005678901' },
+    { code: 'SUP-003', name: 'PT Wavin Anamtex (Rucika)', email: 'order@rucika.co.id', phone: '021-8801234', address: 'Kawasan Industri Pulogadung, Jakarta Timur 13930', city: 'Jakarta Timur', npwp: '01.555.777.0-071.000', bankName: 'BRI', bankAccount: '003101010101309' },
+    { code: 'SUP-004', name: 'PT Roman Ceramics Indonesia', email: 'sales@romanceramics.com', phone: '021-29027000', address: 'Jl. Daan Mogot Km. 18, Tangerang 15122', city: 'Tangerang', npwp: '01.333.444.0-421.000', bankName: 'BCA', bankAccount: '7770099888' },
+    { code: 'SUP-005', name: 'PT ICI Paints Indonesia (Dulux)', email: 'csc@akzonobel.com', phone: '021-5321901', address: 'Jl. Letjend S. Parman Kav. 76, Jakarta Barat 11410', city: 'Jakarta Barat', npwp: '01.777.888.0-051.000', bankName: 'CIMB Niaga', bankAccount: '54801036880' },
+    { code: 'SUP-006', name: 'CV Maju Jaya Bangunan', email: 'majujaya@gmail.com', phone: '021-7771234', address: 'Jl. Panjang No. 45, Kebon Jeruk, Jakarta Barat 11530', city: 'Jakarta Barat', npwp: '55.111.222.0-023.000', bankName: 'Mandiri', bankAccount: '1230099887766' },
+    { code: 'SUP-007', name: 'PT Sumber Bangunan Sejahtera', email: 'info@sbsejahtera.com', phone: '022-6123456', address: 'Jl. Soekarno-Hatta No. 212, Bandung 40292', city: 'Bandung', npwp: '62.444.555.0-429.000', bankName: 'BNI', bankAccount: '0987654321' },
+    { code: 'SUP-008', name: 'PT Gunung Garuda Steel', email: 'penjualan@gununggaruda.com', phone: '021-8801500', address: 'Jl. Raya Bekasi Km. 23, Cakung, Jakarta Timur 13910', city: 'Jakarta Timur', npwp: '01.888.999.0-073.000', bankName: 'BCA', bankAccount: '0880015001' },
   ];
 
-  const nb = (t: string) => ['ASSET','EXPENSE'].includes(t) ? 'DEBIT' : 'CREDIT';
-  const accMap = new Map<string, string>();
-  // roots first
-  for (const c of coaIndonesia.filter(x => !x.parentCode)) {
-    const a = await prisma.account.upsert({
-      where: { code: c.code }, update: { name: c.name },
-      create: { code: c.code, name: c.name, type: c.type as any, isActive: true, normalBalance: nb(c.type) },
-    });
-    accMap.set(c.code, a.id);
+  let supCount = 0;
+  for (const s of supplierSeeds) {
+    await prisma.supplier.upsert({ where: { code: s.code }, update: {}, create: s });
+    supCount++;
   }
-  // children
-  for (const c of coaIndonesia.filter(x => !!x.parentCode)) {
-    const parentId = accMap.get(c.parentCode!);
-    const a = await prisma.account.upsert({
-      where: { code: c.code }, update: { name: c.name },
-      create: { code: c.code, name: c.name, type: c.type as any, parentId, isActive: true, normalBalance: nb(c.type) },
-    });
-    accMap.set(c.code, a.id);
-  }
+  console.log(`   ✓ ${supCount} supplier`);
 
-  // ─── FISCAL YEAR default ──────────────────────────────────────────────
-  const yr = new Date().getFullYear();
-  const fyName = `Tahun ${yr}`;
-  const existFY = await prisma.fiscalYear.findFirst({ where: { nama: fyName } });
-  if (!existFY) {
-    const fy = await prisma.fiscalYear.create({
-      data: { nama: fyName, startDate: new Date(`${yr}-01-01`), endDate: new Date(`${yr}-12-31`), status: 'OPEN' },
-    });
-    for (let m = 1; m <= 12; m++) {
-      const s = new Date(yr, m - 1, 1);
-      const e = new Date(yr, m, 0);
-      await prisma.fiscalPeriod.create({
-        data: { fiscalYearId: fy.id, bulan: m, tahun: yr, startDate: s, endDate: e, status: 'OPEN' },
-      });
+  // ─── CUSTOMERS ────────────────────────────────────────────────────────────
+  console.log('👥 Seeding customers...');
+
+  const customerSeeds = [
+    { name: 'PT Bangun Persada Konstruksi', email: 'procurement@bpkonstruksi.com', phone: '021-5551001', address: 'Jl. TB Simatupang No. 88, Pasar Minggu, Jakarta Selatan 12520', city: 'Jakarta Selatan', province: 'DKI Jakarta', npwp: '72.001.002.0-051.000', creditLimit: 200000000 },
+    { name: 'CV Karya Muda Developer', email: 'keuangan@karyamuda.co.id', phone: '021-8881002', address: 'Jl. Raya Ciputat No. 12, Tangerang Selatan 15411', city: 'Tangerang Selatan', province: 'Banten', creditLimit: 100000000 },
+    { name: 'PT Cahaya Mandiri Proyek', email: 'admin@cahayamandiri.co.id', phone: '031-7891003', address: 'Jl. Raya Darmo Permai III No. 25, Surabaya 60226', city: 'Surabaya', province: 'Jawa Timur', npwp: '72.003.004.0-616.000', creditLimit: 150000000 },
+    { name: 'Toko Bangunan Sinar Mas', email: 'sinarmas.bangunan@gmail.com', phone: '0274-561004', address: 'Jl. Tentara Pelajar No. 7, Yogyakarta 55243', city: 'Yogyakarta', province: 'DI Yogyakarta', creditLimit: 50000000 },
+    { name: 'PT Griya Indah Properti', email: 'buy@griyaindah.com', phone: '021-7451005', address: 'Jl. Kemang Raya No. 50, Kemang, Jakarta Selatan 12560', city: 'Jakarta Selatan', province: 'DKI Jakarta', npwp: '72.005.006.0-051.000', creditLimit: 300000000 },
+    { name: 'CV Mulia Jaya Contractor', email: 'muliajaya.contractor@gmail.com', phone: '022-7341006', address: 'Jl. Sumatera No. 33, Bandung 40117', city: 'Bandung', province: 'Jawa Barat', creditLimit: 75000000 },
+    { name: 'Bapak Eko Prasetyo', phone: '081234567001', address: 'Perumahan Permata Biru Blok C5, Depok 16416', city: 'Depok', province: 'Jawa Barat', creditLimit: 5000000 },
+    { name: 'PT Andalan Bangun Sentosa', email: 'purchase@andalanbs.co.id', phone: '021-6501007', address: 'Jl. Puri Kencana No. 1, Kembangan, Jakarta Barat 11610', city: 'Jakarta Barat', province: 'DKI Jakarta', npwp: '72.007.008.0-023.000', creditLimit: 250000000 },
+    { name: 'Toko Berkah Material', email: 'berkahmaterial@yahoo.com', phone: '0341-891008', address: 'Jl. Veteran No. 77, Malang 65141', city: 'Malang', province: 'Jawa Timur', creditLimit: 40000000 },
+    { name: 'PT Mitra Bangun Perkasa', email: 'info@mitrabangun.co.id', phone: '021-5301009', address: 'Kawasan Industri Berikat Nusantara, Pluit, Jakarta Utara 14440', city: 'Jakarta Utara', province: 'DKI Jakarta', npwp: '72.009.010.0-052.000', creditLimit: 500000000 },
+    { name: 'CV Rejeki Bangunan', email: 'rejekibangunan@gmail.com', phone: '0265-7891010', address: 'Jl. Merdeka No. 15, Purwokerto 53111', city: 'Purwokerto', province: 'Jawa Tengah', creditLimit: 30000000 },
+    { name: 'PT Buana Konstruksi Utama', email: 'bkutama@bkonstruksi.co.id', phone: '0351-4831011', address: 'Jl. Pahlawan No. 2, Madiun 63133', city: 'Madiun', province: 'Jawa Timur', npwp: '72.011.012.0-617.000', creditLimit: 120000000 },
+    { name: 'Ibu Siti Rahayu', phone: '081387651012', address: 'Jl. Margonda Raya No. 100, Depok 16424', city: 'Depok', province: 'Jawa Barat', creditLimit: 3000000 },
+    { name: 'PT Nusantara Properti Kencana', email: 'npk@nusantarapropert.com', phone: '021-7891013', address: 'Jl. Fatmawati No. 188, Cilandak, Jakarta Selatan 12420', city: 'Jakarta Selatan', province: 'DKI Jakarta', npwp: '72.013.014.0-051.000', creditLimit: 400000000 },
+    { name: 'CV Putra Mandiri Kontraktor', email: 'putramandiri.ktr@gmail.com', phone: '0231-8901014', address: 'Jl. Tuparev No. 67, Cirebon 45153', city: 'Cirebon', province: 'Jawa Barat', creditLimit: 60000000 },
+  ];
+
+  let custCount = 0;
+  for (const c of customerSeeds) {
+    const exists = await prisma.customer.findFirst({ where: { name: c.name } });
+    if (!exists) {
+      await prisma.customer.create({ data: c });
     }
+    custCount++;
   }
+  console.log(`   ✓ ${custCount} customer`);
+
+  // ─── SUMMARY ──────────────────────────────────────────────────────────────
+  console.log('\n✅ Seeding selesai!\n');
+  const [r, u, w, cat, un, p, s, sup, cust] = await Promise.all([
+    prisma.role.count(), prisma.user.count(), prisma.warehouse.count(),
+    prisma.productCategory.count(), prisma.productUnit.count(), prisma.product.count(),
+    prisma.stock.count(), prisma.supplier.count(), prisma.customer.count(),
+  ]);
+  console.table({ roles: r, users: u, warehouses: w, categories: cat, units: un, products: p, stocks: s, suppliers: sup, customers: cust });
+
+  console.log('\n🔑 Login credentials:');
+  console.log('   superadmin@gentongmas.com  →  Admin1234!   (Super Admin)');
+  console.log('   admin@gentongmas.com       →  Admin1234!   (Admin)');
+  console.log('   owner@gentongmas.com       →  Owner1234!   (Owner)');
+  console.log('   sales1@gentongmas.com      →  Sales1234!   (Sales)');
+  console.log('   finance@gentongmas.com     →  Finance1234! (Finance)');
+  console.log('   gudang@gentongmas.com      →  Gudang1234!  (Gudang)');
+}
 
 main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(async () => { await prisma.$disconnect(); });
+  .catch(e => { console.error(e); process.exit(1); })
+  .finally(() => prisma.$disconnect());
