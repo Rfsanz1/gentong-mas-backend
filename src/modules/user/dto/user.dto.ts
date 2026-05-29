@@ -2,49 +2,61 @@ import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MinLength
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateUserDto {
-  @ApiProperty({ example: 'user@erp.com' })
+  @ApiProperty({ type: String, example: 'user@erp.com' })
   @IsEmail()
   email!: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: String, example: 'Budi Santoso' })
   @IsString()
   @IsNotEmpty()
   name!: string;
 
-  @ApiProperty({ minLength: 8 })
+  @ApiProperty({ type: String, example: 'password123', minLength: 8 })
   @IsString()
   @MinLength(8)
   password!: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: String, example: 'uuid-role-id' })
   @IsUUID()
   roleId!: string;
 }
 
 export class UpdateUserDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: String, example: 'Budi Santoso' })
   @IsString()
   @IsOptional()
   name?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: String, example: 'user@erp.com' })
   @IsEmail()
   @IsOptional()
   email?: string;
 
-  @ApiPropertyOptional({ minLength: 8 })
+  @ApiPropertyOptional({ type: String, example: 'newpassword123', minLength: 8 })
   @IsString()
   @MinLength(8)
   @IsOptional()
   password?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: String, example: 'uuid-role-id' })
   @IsUUID()
   @IsOptional()
   roleId?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: Boolean, example: true })
   @IsBoolean()
   @IsOptional()
   active?: boolean;
+}
+
+export class ChangePasswordDto {
+  @ApiProperty({ type: String, example: 'oldpassword123' })
+  @IsString()
+  @IsNotEmpty()
+  oldPassword!: string;
+
+  @ApiProperty({ type: String, example: 'newpassword123', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  newPassword!: string;
 }

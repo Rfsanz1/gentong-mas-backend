@@ -1,0 +1,1 @@
+- [tsx-swagger-metadata](tsx-swagger-metadata.md) — tsx/esbuild tidak emit emitDecoratorMetadata, harus pakai @ApiBody eksplisit + type: String/Number/Boolean di semua @ApiProperty
